@@ -10,12 +10,12 @@ func Recover(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
-				if err := recover(); err != nil{
+				if err := recover(); err != nil {
 					log.Error("internal error", "panic", err, "path", r.URL.Path)
 					http.Error(w, "internal server error", http.StatusInternalServerError)
 				}
 			}()
-			next.ServeHTTP(w,r)
+			next.ServeHTTP(w, r)
 		})
 	}
 }
@@ -31,7 +31,7 @@ func (r *statusRecorder) WriteHeader(code int) {
 }
 
 // Logging writes one line per request with method, path, status and duration.
-func Logging(log* slog.Logger) func(http.Handler) http.Handler {
+func Logging(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()

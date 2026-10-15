@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/PMPRR/SCOM---Trabalho-2/internal/server/middleware"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func NewRouter(log *slog.Logger, db *pgxpool.Pool) http.Handler {
@@ -13,6 +13,7 @@ func NewRouter(log *slog.Logger, db *pgxpool.Pool) http.Handler {
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := db.Ping(r.Context()); err != nil {
+			log.Error("health check failed", "error", err)
 			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
 			return
 		}
