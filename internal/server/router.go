@@ -14,10 +14,11 @@ func NewRouter(log *slog.Logger, db *pgxpool.Pool) http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := db.Ping(r.Context()); err != nil {
 			log.Error("health check failed", "error", err)
-			http.Error(w, "database unavailable", http.StatusServiceUnavailable)
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"status":"unavailable"}`))
 			return
 		}
-		w.Write([]byte("ok"))
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
 	static := http.FileServer(http.Dir("web/static"))
