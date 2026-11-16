@@ -1,9 +1,12 @@
 -include .env
+
+COMPOSE ?= podman compose
+
 export
 .PHONY: db run test migrate-up migrate-down migrate-status schema
 
 db:
-	podman compose up -d db
+	$(COMPOSE) up -d db
 
 run:
 	go run ./cmd/server
@@ -21,5 +24,5 @@ migrate-status:
 	@goose -dir migrations postgres "$(DATABASE_URL)" status
 
 schema:
-	@podman exec scom_trab2_db_1 pg_dump -U $(POSTGRES_USER) -d $(POSTGRES_DB) \
+	@$(COMPOSE) exec scom_trab2_db_1 pg_dump -U $(POSTGRES_USER) -d $(POSTGRES_DB) \
 		--schema-only --no-owner -T goose_db_version > db/schema.sql
