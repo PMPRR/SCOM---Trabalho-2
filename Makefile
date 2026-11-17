@@ -1,9 +1,9 @@
 -include .env
+export
 
 COMPOSE ?= podman compose
 
-export
-.PHONY: db run test migrate-up migrate-down migrate-status schema
+.PHONY: db run test ingest seed-dev migrate-up migrate-down migrate-status schema
 
 db:
 	$(COMPOSE) up -d db
@@ -13,6 +13,16 @@ run:
 
 test:
 	go test ./...
+
+# Coleta as fontes externas uma vez (Open-Meteo e METAR; INMET e CEMADEN se
+# houver credenciais no .env).
+ingest:
+	go run ./cmd/ingest
+
+# Estacoes simuladas para desenvolvimento. Nao e migracao.
+seed-dev:
+	@$(COMPOSE) exec -T db psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) \
+		-v ON_ERROR_STOP=1 < db/seed_dev.sql
 
 migrate-up:
 	@goose -dir migrations postgres "$(DATABASE_URL)" up
@@ -24,5 +34,6 @@ migrate-status:
 	@goose -dir migrations postgres "$(DATABASE_URL)" status
 
 schema:
-	@$(COMPOSE) exec scom_trab2_db_1 pg_dump -U $(POSTGRES_USER) -d $(POSTGRES_DB) \
+	@$(COMPOSE) exec -T db pg_dump -U $(POSTGRES_USER) -d $(POSTGRES_DB) \
 		--schema-only --no-owner -T goose_db_version > db/schema.sql
+
