@@ -21,6 +21,16 @@ var (
 	ErrTooManyRequests = errors.New("too many requests")
 )
 
+// Errors of station management.
+var (
+	// ErrOfficialStation means a change that only stations registered on
+	// the site accept was asked of a station collected from an institute.
+	ErrOfficialStation = errors.New("official station cannot be changed")
+	// ErrStationCodeTaken means another station registered on the site
+	// already uses the code.
+	ErrStationCodeTaken = errors.New("station code already registered")
+)
+
 // ValidationError reports an input that breaks a business rule. Message is
 // written for the end user.
 type ValidationError struct {

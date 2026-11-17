@@ -46,3 +46,31 @@ type Station struct {
 	Confidence    Confidence   `json:"confidence"`
 }
 
+// OperatorInstitute is the institutes.code of the stations registered by
+// hand on the site. Their owner is the user who registered them.
+const OperatorInstitute = "particular"
+
+// IsOfficial reports whether the station comes from an institute's network
+// (it has no owner). Its data is kept up to date by the collection, so on
+// the site it can only be turned on or off, never edited or deleted.
+func (s Station) IsOfficial() bool {
+	return s.OwnerID == nil
+}
+
+// StationInput is what a user sends to register a station or change one.
+type StationInput struct {
+	ExternalCode string
+	Name         string
+	Lat          float64
+	Lon          float64
+	AltitudeM    *float32
+	Active       bool
+}
+
+// StationFilter narrows a listing of stations. The zero value lists all.
+type StationFilter struct {
+	ActiveOnly  bool   // leave out stations turned off
+	OwnerID     *int64 // only the stations of this user
+	Search      string // part of the name or of the code, any case
+	NewestFirst bool   // most recent registration first, instead of by id
+}
