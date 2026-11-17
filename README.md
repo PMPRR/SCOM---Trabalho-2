@@ -82,7 +82,7 @@ sessões e as decisões de projeto, está em
 
 ## Requisitos
 
-Para só **rodar** o sistema basta Podman ou Docker com Compose: o servidor,
+Para só **rodar** o sistema bastam Podman ou Docker com Compose, e `make`: o servidor,
 o goose e o banco vêm em contêineres (veja "Jeito rápido" abaixo).
 
 Para **desenvolver** com o servidor rodando direto na máquina:
@@ -100,31 +100,38 @@ go install github.com/pressly/goose/v3/cmd/goose@latest
 
 ## Como executar
 
-### Jeito rápido: tudo em contêiner
+### Jeito rápido: um comando
+
+Com Podman (ou Docker) e `make` instalados:
 
 ```sh
 git clone https://github.com/PMPRR/SCOM---Trabalho-2.git
 cd SCOM---Trabalho-2
-cp .env.example .env               # troque change-me por uma senha sua
-podman compose up -d --build       # ou: docker compose up -d --build, ou: make up
+cp .env.example .env     # troque change-me por uma senha sua
+make up
 ```
 
-Abra <http://localhost:8080/>. Na partida, o contêiner do servidor espera o
-banco ficar pronto, aplica as migrações pendentes e começa a coletar as
-fontes externas a cada `INGEST_INTERVAL` (1 h no `.env.example`); a primeira
-coleta é imediata. Nada precisa estar instalado além do Podman ou Docker.
+O `make up` faz tudo e só termina com o site no ar:
+
+1. compila a imagem do servidor;
+2. sobe o banco (PostgreSQL + PostGIS) e o servidor em contêineres;
+3. o servidor espera o banco, aplica as migrações e começa a coletar;
+4. espera a primeira coleta das estações (Open-Meteo, e o CEMADEN se houver
+   credenciais no `.env`) e mostra quantas estações e leituras chegaram.
+
+Depois abra <http://localhost:8080/>. A coleta se repete sozinha a cada
+`INGEST_INTERVAL` (1 h).
 
 | Comando | O que faz |
 |---|---|
-| `podman compose logs -f app` | Acompanha o log do servidor (`make logs`) |
-| `podman compose down` | Para tudo; os dados ficam no volume `pgdata` (`make down`) |
-| `podman compose down -v` | Para tudo e apaga o banco |
-| `podman compose up -d --build` | Recompila e sobe de novo depois de mudar o código |
-| `podman compose run --rm app ingest` | Coleta as fontes uma vez, fora do horário |
-| `make promote-admin EMAIL=...` | Promove uma conta a administrador (funciona igual) |
-| `make seed-dev` | Grava as 28 estações simuladas (funciona igual) |
+| `make up` | Sobe tudo; depois de mudar o código, recompila e sobe de novo |
+| `make logs` | Acompanha o log do servidor |
+| `make down` | Para tudo; o banco fica guardado |
+| `make reset` | Para tudo e apaga o banco |
+| `make promote-admin EMAIL=...` | Promove uma conta cadastrada no site a administrador |
+| `make seed-dev` | Grava as 28 estações simuladas |
 
-Com Docker, troque `podman compose` por `docker compose`, ou use
+O `make` usa o Podman se ele estiver instalado, senão o Docker. Para escolher:
 `make up COMPOSE="docker compose"`.
 
 Observações:
@@ -134,7 +141,9 @@ Observações:
 - Com `APP_ENV=prod` os cookies passam a exigir HTTPS. Os navegadores aceitam
   isso em `http://localhost`, mas não por outro endereço sem HTTPS; nesse caso
   use um proxy reverso com TLS na frente.
-- O banco fica acessível só desta máquina, na porta `DB_PORT` (5432).
+- Portas no computador: `APP_PORT` (8080) para o site e `DB_PORT` (5432) para
+  o banco, este só acessível desta máquina. Se alguma estiver ocupada, troque
+  no `.env`.
 - A imagem `postgis/postgis` é publicada para x86-64; em computadores ARM
   (Mac M1 em diante) o Docker Desktop e o Podman a executam por emulação,
   mais devagar.
@@ -403,9 +412,10 @@ público). Eles aparecem na página do mapa.
 
 | Comando | O que faz |
 |---|---|
-| `make up` | Sobe banco e servidor em contêineres (compila a imagem) |
+| `make up` | Sobe tudo em contêineres: banco, migrações, servidor e primeira coleta |
 | `make down` | Para os contêineres; os dados ficam no volume |
 | `make logs` | Acompanha o log do servidor em contêiner |
+| `make reset` | Para os contêineres e apaga o banco |
 | `make db` | Sobe só o contêiner do banco |
 | `make run` | Executa o servidor |
 | `make test` | Executa os testes automatizados |

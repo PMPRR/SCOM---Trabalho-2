@@ -1,0 +1,10 @@
+# Fora da imagem: segredos, histórico e o que o servidor não usa.
+.env
+.git
+.gitignore
+docs
+tools
+db
+*.md
+*.test
+*.out

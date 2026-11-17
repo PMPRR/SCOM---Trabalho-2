@@ -1,20 +1,27 @@
 -include .env
 export
 
-COMPOSE ?= podman compose
+# Podman se estiver instalado; senao Docker. Para forcar: make up COMPOSE="docker compose"
+COMPOSE ?= $(shell if command -v podman >/dev/null 2>&1; then echo podman compose; else echo docker compose; fi)
 
-.PHONY: up down logs db run test ingest seed-dev promote-admin migrate-up migrate-down migrate-status schema schema-load
+.PHONY: up down logs reset db run test ingest seed-dev promote-admin migrate-up migrate-down migrate-status schema schema-load
 
-# Sobe tudo em conteineres: banco e servidor. O servidor espera o banco,
-# aplica as migracoes e comeca a coletar. Site em http://localhost:8080.
+# Tudo com um comando, depois de criar o .env (cp .env.example .env):
+# compila o servidor, sobe banco e servidor em conteineres, aplica as
+# migracoes, faz a primeira coleta das estacoes e so termina com o site no ar.
 up:
-	$(COMPOSE) up -d --build
+	@sh deploy/up.sh
 
+# Para os conteineres; o banco fica guardado no volume.
 down:
 	$(COMPOSE) down
 
 logs:
 	$(COMPOSE) logs -f app
+
+# Para tudo e apaga o banco. O proximo make up comeca do zero.
+reset:
+	$(COMPOSE) down -v
 
 # So o banco, para rodar o servidor na maquina com make run.
 db:
