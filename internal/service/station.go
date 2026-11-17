@@ -24,6 +24,7 @@ type StationRepository interface {
 	Update(ctx context.Context, id int64, in domain.StationInput) error
 	SetActive(ctx context.Context, id int64, active bool) error
 	Delete(ctx context.Context, id int64) error
+	SaveSubmission(ctx context.Context, stationID int64, obs domain.Observation, receivedAt, notBefore time.Time) (bool, error)
 }
 
 // Page describes which slice of a listing was returned.
@@ -70,6 +71,28 @@ func confidenceOf(st domain.Station, now time.Time) domain.Confidence {
 	}
 }
 
+// derive fills in what is computed from the stored data rather than stored.
+func derive(st *domain.Station, now time.Time) {
+	st.Confidence = confidenceOf(*st, now)
+	st.UplinkStatus = uplinkStatusOf(*st, now)
+}
+
+// uplinkStatusOf tells whether a station that sends its own readings is
+// keeping to its interval. Two intervals of silence are allowed before it
+// counts as late: one late submission is not a failure.
+func uplinkStatusOf(st domain.Station, now time.Time) domain.UplinkStatus {
+	switch {
+	case st.PublicKey == "" || st.ReportIntervalS == nil:
+		return ""
+	case st.LastReportAt == nil:
+		return domain.UplinkWaiting
+	case now.Sub(*st.LastReportAt) > 2*time.Duration(*st.ReportIntervalS)*time.Second:
+		return domain.UplinkLate
+	default:
+		return domain.UplinkOK
+	}
+}
+
 // List returns one page of the stations open to the public: those turned
 // on. Limit must be between 1 and MaxPageLimit and offset must not be
 // negative.
@@ -88,7 +111,7 @@ func (s *StationService) list(ctx context.Context, filter domain.StationFilter, 
 	}
 	now := s.now()
 	for i := range stations {
-		stations[i].Confidence = confidenceOf(stations[i], now)
+		derive(&stations[i], now)
 	}
 	return stations, Page{Limit: limit, Offset: offset, Total: total}, nil
 }
@@ -134,6 +157,6 @@ func (s *StationService) get(ctx context.Context, id int64) (domain.Station, err
 	if err != nil {
 		return domain.Station{}, err
 	}
-	station.Confidence = confidenceOf(station, s.now())
+	derive(&station, s.now())
 	return station, nil
 }

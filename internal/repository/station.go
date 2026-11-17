@@ -31,6 +31,7 @@ const stationSelect = `
 SELECT s.id, i.code, i.name, s.external_code, s.name,
        ST_Y(s.location::geometry), ST_X(s.location::geometry),
        s.altitude_m, s.active, s.owner_id, s.created_at, s.updated_at,
+       s.public_key, s.key_fingerprint, s.report_interval_s, s.last_report_at,
        o.observed_at, o.temperature_c, o.humidity_pct, o.precipitation_mm,
        o.wind_speed_ms, o.wind_dir_deg, o.pressure_hpa
 FROM stations s
@@ -126,10 +127,12 @@ func (r *StationRepository) Get(ctx context.Context, id int64) (domain.Station, 
 // institute is not registered the SELECT yields no row and nothing is
 // inserted. Longitude comes first in ST_MakePoint.
 const insertStation = `
-INSERT INTO stations (institute_id, external_code, name, location, altitude_m, active, owner_id)
+INSERT INTO stations (institute_id, external_code, name, location, altitude_m, active, owner_id,
+                      public_key, key_fingerprint, report_interval_s)
 SELECT i.id, $2::text, $3::text,
        ST_SetSRID(ST_MakePoint($4::float8, $5::float8), 4326)::geography,
-       $6::real, $7::boolean, $8::bigint
+       $6::real, $7::boolean, $8::bigint,
+       NULLIF($9::text, ''), NULLIF($10::text, ''), NULLIF($11::integer, 0)
 FROM institutes i
 WHERE i.code = $1
 RETURNING id`
@@ -141,10 +144,11 @@ func (r *StationRepository) Create(ctx context.Context, ownerID int64, in domain
 	var id int64
 	err := r.db.QueryRow(ctx, insertStation,
 		domain.OperatorInstitute, in.ExternalCode, in.Name, in.Lon, in.Lat, in.AltitudeM, in.Active, ownerID,
+		in.PublicKey, in.KeyFingerprint, in.ReportIntervalS,
 	).Scan(&id)
 	switch {
 	case isUniqueViolation(err):
-		return 0, domain.ErrStationCodeTaken
+		return 0, stationConflict(err)
 	case errors.Is(err, pgx.ErrNoRows):
 		return 0, fmt.Errorf("institute %q is not registered: run the migrations", domain.OperatorInstitute)
 	case err != nil:
@@ -159,12 +163,19 @@ func (r *StationRepository) Update(ctx context.Context, id int64, in domain.Stat
 UPDATE stations
 SET external_code = $2, name = $3,
     location = ST_SetSRID(ST_MakePoint($4::float8, $5::float8), 4326)::geography,
-    altitude_m = $6, active = $7, updated_at = now()
+    altitude_m = $6, active = $7,
+    public_key = NULLIF($8::text, ''), key_fingerprint = NULLIF($9::text, ''),
+    report_interval_s = NULLIF($10::integer, 0),
+    -- A new key starts a new count: the old one may have sent minutes ago.
+    last_report_at = CASE WHEN key_fingerprint IS NOT DISTINCT FROM NULLIF($9::text, '')
+                          THEN last_report_at END,
+    updated_at = now()
 WHERE id = $1`,
-		id, in.ExternalCode, in.Name, in.Lon, in.Lat, in.AltitudeM, in.Active)
+		id, in.ExternalCode, in.Name, in.Lon, in.Lat, in.AltitudeM, in.Active,
+		in.PublicKey, in.KeyFingerprint, in.ReportIntervalS)
 	switch {
 	case isUniqueViolation(err):
-		return domain.ErrStationCodeTaken
+		return stationConflict(err)
 	case err != nil:
 		return fmt.Errorf("update station %d: %w", id, err)
 	case tag.RowsAffected() == 0:
@@ -198,17 +209,89 @@ func (r *StationRepository) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+// stationConflict tells which UNIQUE constraint a new or changed station
+// broke: the public key, or the code inside the institute.
+func stationConflict(err error) error {
+	if constraintOf(err) == "stations_key_fingerprint_key" {
+		return domain.ErrKeyTaken
+	}
+	return domain.ErrStationCodeTaken
+}
+
+// SaveSubmission stores a reading sent by the station itself, in one
+// transaction. It returns false, without error, when a reading with the same
+// time is already stored: a station that did not get the answer and sends
+// again is not refused. It returns a *domain.TooSoonError when the previous
+// submission was later than notBefore.
+//
+// The interval is checked and the time of this submission recorded by the
+// same UPDATE, which locks the row of the station: two submissions at the
+// same moment cannot both pass.
+func (r *StationRepository) SaveSubmission(ctx context.Context, stationID int64, obs domain.Observation, receivedAt, notBefore time.Time) (bool, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return false, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var duplicate bool
+	err = tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM observations WHERE station_id = $1 AND observed_at = $2)`,
+		stationID, obs.ObservedAt,
+	).Scan(&duplicate)
+	if err != nil {
+		return false, fmt.Errorf("look up reading of station %d: %w", stationID, err)
+	}
+	if duplicate {
+		return false, nil
+	}
+
+	var id int64
+	err = tx.QueryRow(ctx, `
+UPDATE stations SET last_report_at = $2
+WHERE id = $1 AND (last_report_at IS NULL OR last_report_at <= $3)
+RETURNING id`, stationID, receivedAt, notBefore).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		var last *time.Time
+		if err := tx.QueryRow(ctx, `SELECT last_report_at FROM stations WHERE id = $1`, stationID).Scan(&last); err != nil {
+			return false, fmt.Errorf("read last report of station %d: %w", stationID, err)
+		}
+		if last == nil { // the station is gone
+			return false, domain.ErrNotFound
+		}
+		return false, &domain.TooSoonError{Wait: last.Sub(notBefore)}
+	}
+	if err != nil {
+		return false, fmt.Errorf("record report of station %d: %w", stationID, err)
+	}
+
+	_, err = tx.Exec(ctx, insertObservation,
+		stationID, obs.ObservedAt, obs.TemperatureC, obs.HumidityPct, obs.PrecipitationMM,
+		obs.WindSpeedMS, obs.WindDirDeg, obs.PressureHPa,
+	)
+	if err != nil {
+		return false, fmt.Errorf("save reading of station %d: %w", stationID, err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("commit: %w", err)
+	}
+	return true, nil
+}
+
 // scanStation reads one row produced by stationSelect.
 func scanStation(row pgx.Row) (domain.Station, error) {
 	var (
-		st         domain.Station
-		observedAt *time.Time
-		obs        domain.Observation
+		st             domain.Station
+		observedAt     *time.Time
+		obs            domain.Observation
+		publicKey      *string
+		keyFingerprint *string
 	)
 	err := row.Scan(
 		&st.ID, &st.InstituteCode, &st.InstituteName, &st.ExternalCode, &st.Name,
 		&st.Lat, &st.Lon,
 		&st.AltitudeM, &st.Active, &st.OwnerID, &st.CreatedAt, &st.UpdatedAt,
+		&publicKey, &keyFingerprint, &st.ReportIntervalS, &st.LastReportAt,
 		&observedAt, &obs.TemperatureC, &obs.HumidityPct, &obs.PrecipitationMM,
 		&obs.WindSpeedMS, &obs.WindDirDeg, &obs.PressureHPa,
 	)
@@ -218,6 +301,9 @@ func scanStation(row pgx.Row) (domain.Station, error) {
 	if observedAt != nil {
 		obs.ObservedAt = *observedAt
 		st.Latest = &obs
+	}
+	if publicKey != nil && keyFingerprint != nil {
+		st.PublicKey, st.KeyFingerprint = *publicKey, *keyFingerprint
 	}
 	return st, nil
 }

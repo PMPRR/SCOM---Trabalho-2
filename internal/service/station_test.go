@@ -18,6 +18,7 @@ type fakeRepo struct {
 	stations []domain.Station
 	calls    int
 	filters  []domain.StationFilter
+	readings map[int64][]domain.Observation // submissions stored, by station
 }
 
 func (f *fakeRepo) List(_ context.Context, filter domain.StationFilter, limit, offset int) ([]domain.Station, int, error) {
@@ -66,10 +67,12 @@ func (f *fakeRepo) Create(_ context.Context, ownerID int64, in domain.StationInp
 	f.calls++
 	id := int64(len(f.stations) + 100)
 	owner := ownerID
-	f.stations = append(f.stations, domain.Station{
+	st := domain.Station{
 		ID: id, InstituteCode: domain.OperatorInstitute, ExternalCode: in.ExternalCode, Name: in.Name,
 		Lat: in.Lat, Lon: in.Lon, AltitudeM: in.AltitudeM, Active: in.Active, OwnerID: &owner,
-	})
+	}
+	setUplink(&st, in)
+	f.stations = append(f.stations, st)
 	return id, nil
 }
 
@@ -80,6 +83,7 @@ func (f *fakeRepo) Update(_ context.Context, id int64, in domain.StationInput) e
 		return domain.ErrNotFound
 	}
 	st.ExternalCode, st.Name, st.Lat, st.Lon, st.AltitudeM, st.Active = in.ExternalCode, in.Name, in.Lat, in.Lon, in.AltitudeM, in.Active
+	setUplink(st, in)
 	return nil
 }
 
@@ -102,6 +106,38 @@ func (f *fakeRepo) Delete(_ context.Context, id int64) error {
 		}
 	}
 	return domain.ErrNotFound
+}
+
+func setUplink(st *domain.Station, in domain.StationInput) {
+	st.PublicKey, st.KeyFingerprint, st.ReportIntervalS = in.PublicKey, in.KeyFingerprint, nil
+	if in.ReportIntervalS != 0 {
+		interval := in.ReportIntervalS
+		st.ReportIntervalS = &interval
+	}
+}
+
+// SaveSubmission follows the same rule as the SQL of the repository.
+func (f *fakeRepo) SaveSubmission(_ context.Context, id int64, obs domain.Observation, receivedAt, notBefore time.Time) (bool, error) {
+	f.calls++
+	st := f.find(id)
+	if st == nil {
+		return false, domain.ErrNotFound
+	}
+	for _, stored := range f.readings[id] {
+		if stored.ObservedAt.Equal(obs.ObservedAt) {
+			return false, nil
+		}
+	}
+	if st.LastReportAt != nil && st.LastReportAt.After(notBefore) {
+		return false, &domain.TooSoonError{Wait: st.LastReportAt.Sub(notBefore)}
+	}
+	if f.readings == nil {
+		f.readings = map[int64][]domain.Observation{}
+	}
+	f.readings[id] = append(f.readings[id], obs)
+	last := receivedAt
+	st.LastReportAt = &last
+	return true, nil
 }
 
 func threeStations() *fakeRepo {

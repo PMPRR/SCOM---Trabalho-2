@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/PMPRR/SCOM---Trabalho-2/internal/domain"
+	"github.com/PMPRR/SCOM---Trabalho-2/internal/security"
 )
 
 // Who may change which station:
@@ -18,6 +19,7 @@ import (
 //	registrar estação       | sim (fica dono)     | sim (fica dono)
 //	editar / excluir        | só as suas          | as cadastradas no site
 //	ativar / desativar      | só as suas          | todas
+//	chave de envio          | só nas suas         | nas cadastradas no site
 //
 // A station collected from an institute (no owner) is never edited nor
 // deleted on the site: the next collection would write its name and
@@ -29,6 +31,12 @@ const (
 	maxSearchLength = 120
 	minAltitudeM    = -100 // below sea level, for a sensor in a pit
 	maxAltitudeM    = 3000 // above the highest point of the State (2,798 m)
+)
+
+// Limits of the interval a station sends its readings at.
+const (
+	minReportInterval = 60           // seconds: one a minute
+	maxReportInterval = 24 * 60 * 60 // seconds: one a day
 )
 
 // stationCode is the code of a station at its owner: letters, digits and
@@ -196,5 +204,28 @@ func normalizeStationInput(in domain.StationInput) (domain.StationInput, error) 
 			Message: "A altitude deve estar entre -100 e 3000 metros.",
 		}
 	}
+
+	// Sending is optional. Without a key the interval means nothing, and is
+	// dropped; with a key, the interval is required.
+	in.PublicKey = strings.TrimSpace(in.PublicKey)
+	in.KeyFingerprint = ""
+	if in.PublicKey == "" {
+		in.ReportIntervalS = 0
+		return in, nil
+	}
+	key, err := security.ParseSSHPublicKey(in.PublicKey)
+	if err != nil {
+		return in, &domain.ValidationError{
+			Field:   "public_key",
+			Message: "A chave deve ser a linha do arquivo .pub de uma chave criada com ssh-keygen -t ed25519 (começa com ssh-ed25519).",
+		}
+	}
+	if in.ReportIntervalS < minReportInterval || in.ReportIntervalS > maxReportInterval {
+		return in, &domain.ValidationError{
+			Field:   "report_interval_s",
+			Message: "O intervalo de envio deve ficar entre 1 minuto e 24 horas.",
+		}
+	}
+	in.PublicKey, in.KeyFingerprint = key.Line, key.Fingerprint
 	return in, nil
 }
