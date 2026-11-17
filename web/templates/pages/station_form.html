@@ -100,6 +100,53 @@
                     <label for="active">Ativa: aparece no mapa e na lista pública</label>
                 </div>
 
+                <!-- Envio automatico: a estacao assina cada leitura com a
+                    chave privada Ed25519 dela; aqui fica so a chave publica. -->
+                <fieldset class="station-form-uplink">
+                    <legend class="field-label">Envio automático <span class="field-opcional">(opcional)</span></legend>
+                    <p class="field-hint" id="uplink-hint">
+                        Para a própria estação enviar as leituras, crie um par de chaves
+                        no computador ou no dispositivo dela com
+                        <code>ssh-keygen -t ed25519 -N "" -f estacao</code> e cole aqui o
+                        conteúdo de <code>estacao.pub</code>. A chave privada,
+                        <code>estacao</code>, fica só na estação.
+                    </p>
+
+                    {{if .Data.HasKey}}
+                    <dl class="account-data station-form-uplink-data">
+                        <dt>Impressão digital</dt>
+                        <dd><code>{{.Data.Fingerprint}}</code></dd>
+                        <dt>Endereço de envio</dt>
+                        <dd><code>{{.Data.SubmitURL}}</code></dd>
+                        <dt>Último envio</dt>
+                        <dd>{{.Data.LastReport}} ({{if .Data.UplinkLate}}<span class="request-error">{{.Data.Uplink}}</span>{{else}}{{.Data.Uplink}}{{end}})</dd>
+                    </dl>
+                    {{end}}
+
+                    <div class="field">
+                        <label class="field-label" for="public_key">Chave pública</label>
+                        <textarea class="field-input station-form-key" id="public_key" name="public_key"
+                            rows="3" spellcheck="false" autocomplete="off"
+                            placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... estacao"
+                            aria-describedby="uplink-hint key-hint"
+                            {{if eq .FormField "public_key"}}aria-invalid="true" autofocus{{end}}>{{index .Form "public_key"}}</textarea>
+                        <p class="field-hint" id="key-hint">Deixe vazio para a estação não enviar leituras. Trocar a chave invalida a anterior na hora.</p>
+                    </div>
+
+                    <div class="field">
+                        <label class="field-label" for="report_interval_s">Intervalo de envio</label>
+                        <select class="field-input" id="report_interval_s" name="report_interval_s"
+                            aria-describedby="interval-hint"
+                            {{if eq .FormField "report_interval_s"}}aria-invalid="true" autofocus{{end}}>
+                            {{$atual := index .Form "report_interval_s"}}
+                            {{range .Data.Intervals}}
+                            <option value="{{.Seconds}}"{{if eq (printf "%d" .Seconds) $atual}} selected{{else if and (eq $atual "") (eq .Seconds 600)}} selected{{end}}>{{.Label}}</option>
+                            {{end}}
+                        </select>
+                        <p class="field-hint" id="interval-hint">Envios mais rápidos que isso são recusados. Sem envio por dois intervalos, a estação aparece como atrasada.</p>
+                    </div>
+                </fieldset>
+
                 <div class="panel-actions">
                     <button class="btn btn-primary" type="submit">{{if .Data.New}}Cadastrar estação{{else}}Salvar alterações{{end}}</button>
                     <a class="btn btn-secondary" href="/painel/estacoes">Cancelar</a>

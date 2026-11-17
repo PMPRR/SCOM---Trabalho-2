@@ -202,3 +202,40 @@
 .station-form-map .leaflet-control-attribution a {
     color: var(--c-accent);
 }
+
+/* Estado do envio automatico, abaixo da situacao da estacao. */
+.panel-uplink {
+    display: block;
+    margin-block-start: var(--sp-1);
+    color: var(--c-muted);
+    font-size: var(--fs-sm);
+    white-space: nowrap;
+}
+
+.panel-uplink-late {
+    color: var(--c-alert);
+}
+
+.station-form-uplink {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    margin: 0;
+    padding: var(--sp-4) 0 0;
+    border: 0;
+    border-block-start: 1px solid var(--c-line);
+}
+
+.station-form-key {
+    font-family: var(--font-num);
+    font-size: var(--fs-sm);
+    resize: vertical;
+}
+
+.station-form-uplink-data {
+    font-size: var(--fs-sm);
+}
+
+.station-form-uplink-data code {
+    overflow-wrap: anywhere;
+}

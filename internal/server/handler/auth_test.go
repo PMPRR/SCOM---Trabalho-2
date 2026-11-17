@@ -144,9 +144,14 @@ func newSite(t *testing.T) *site {
 	mux.Handle("PATCH /api/stations/{id}", loggedIn(http.HandlerFunc(stations.Patch)))
 	mux.Handle("DELETE /api/stations/{id}", loggedIn(http.HandlerFunc(stations.Delete)))
 
-	var root http.Handler = mux
-	root = middleware.LoadUser(authService, rd)(root)
-	root = middleware.CSRF(rd, false)(root)
+	var withSession http.Handler = mux
+	withSession = middleware.LoadUser(authService, rd)(withSession)
+	withSession = middleware.CSRF(rd, false)(withSession)
+	outer := http.NewServeMux()
+	outer.Handle("POST /api/stations/{id}/readings",
+		middleware.RateLimit(security.NewRateLimiter(120, time.Minute), rd)(http.HandlerFunc(stations.SubmitReading)))
+	outer.Handle("/", withSession)
+	var root http.Handler = outer
 
 	srv := httptest.NewServer(root)
 	t.Cleanup(srv.Close)

@@ -5,7 +5,10 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -29,6 +32,10 @@ type StationService interface {
 	Update(ctx context.Context, actor domain.User, id int64, in domain.StationInput) (domain.Station, error)
 	SetActive(ctx context.Context, actor domain.User, id int64, active bool) (domain.Station, error)
 	Delete(ctx context.Context, actor domain.User, id int64) error
+
+	// Submit receives a reading sent by the station itself, authenticated
+	// by its signature and not by a session.
+	Submit(ctx context.Context, id int64, payload []byte, signature string) (domain.SubmissionResult, error)
 }
 
 type StationHandler struct {
@@ -87,6 +94,9 @@ type stationRequest struct {
 	Lon          *float64 `json:"lon"`
 	AltitudeM    *float32 `json:"altitude_m"`
 	Active       *bool    `json:"active"` // missing means true
+	// Optional: the station sends its own readings. Both or neither.
+	PublicKey       string `json:"public_key"`
+	ReportIntervalS int32  `json:"report_interval_s"`
 }
 
 func (req stationRequest) input() (domain.StationInput, error) {
@@ -97,12 +107,14 @@ func (req stationRequest) input() (domain.StationInput, error) {
 		return domain.StationInput{}, &domain.ValidationError{Field: "lon", Message: "Informe a longitude."}
 	}
 	in := domain.StationInput{
-		ExternalCode: req.ExternalCode,
-		Name:         req.Name,
-		Lat:          *req.Lat,
-		Lon:          *req.Lon,
-		AltitudeM:    req.AltitudeM,
-		Active:       true,
+		ExternalCode:    req.ExternalCode,
+		Name:            req.Name,
+		Lat:             *req.Lat,
+		Lon:             *req.Lon,
+		AltitudeM:       req.AltitudeM,
+		Active:          true,
+		PublicKey:       req.PublicKey,
+		ReportIntervalS: req.ReportIntervalS,
 	}
 	if req.Active != nil {
 		in.Active = *req.Active
@@ -246,6 +258,58 @@ func (h *StationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// SignatureHeader carries the base64 Ed25519 signature of the body of a
+// reading sent by a station.
+const SignatureHeader = "X-Signature"
+
+// maxReadingBytes caps the body of a reading. One reading is a few hundred
+// bytes; the cap keeps a device, or anyone, from making the server read
+// more before the signature is checked.
+const maxReadingBytes = 16 << 10
+
+// SubmitReading handles POST /api/stations/{id}/readings, the route the
+// stations send their readings to. It is outside the CSRF check and the
+// session: the request is authenticated by its signature (see
+// service.StationService.Submit). It answers 201 for a new reading and 200
+// for one already stored, with the earliest time of the next submission.
+func (h *StationHandler) SubmitReading(w http.ResponseWriter, r *http.Request) {
+	id, ok := h.pathID(w, r)
+	if !ok {
+		return
+	}
+	if mediaType, _, _ := strings.Cut(r.Header.Get("Content-Type"), ";"); strings.TrimSpace(mediaType) != "application/json" {
+		h.render.Reject(w, r, http.StatusUnsupportedMediaType, "unsupported_media_type",
+			"Envie o corpo em JSON, com o cabeçalho Content-Type: application/json.")
+		return
+	}
+	payload, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxReadingBytes))
+	if err != nil {
+		h.render.Reject(w, r, http.StatusRequestEntityTooLarge, "payload_too_large",
+			"Uma leitura deve ter no máximo 16 KiB.")
+		return
+	}
+
+	result, err := h.stations.Submit(r.Context(), id, payload, r.Header.Get(SignatureHeader))
+	var tooSoon *domain.TooSoonError
+	if errors.As(err, &tooSoon) {
+		w.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(tooSoon.Wait.Seconds()))))
+	}
+	if err != nil {
+		h.render.Fail(w, r, err)
+		return
+	}
+
+	status := http.StatusOK
+	if result.Stored {
+		status = http.StatusCreated
+	}
+	h.render.JSON(w, status, map[string]any{"data": map[string]any{
+		"stored":      result.Stored,
+		"observed_at": result.ObservedAt,
+		"next_after":  result.NextAfter,
+	}})
 }
 
 // cardsPerPage is how many station cards one request of the list returns.

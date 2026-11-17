@@ -118,11 +118,25 @@ func NewRouter(log *slog.Logger, db *pgxpool.Pool, dev bool) (http.Handler, erro
 	static := http.FileServer(http.Dir(staticDir))
 	mux.Handle("GET /static/", http.StripPrefix("/static", static))
 
-	// From the outside in: recover from panics, log the request, check the
-	// CSRF token, find out who is asking, then route.
-	var root http.Handler = mux
-	root = middleware.LoadUser(authService, rd)(root)
-	root = middleware.CSRF(rd, secureCookies)(root)
+	// The site: check the CSRF token, find out who is asking, then route.
+	var site http.Handler = mux
+	site = middleware.LoadUser(authService, rd)(site)
+	site = middleware.CSRF(rd, secureCookies)(site)
+
+	// Readings sent by the stations go around the CSRF check and the
+	// session: no browser and no cookie take part, and each request is
+	// authenticated by the station's signature. CSRF protects ambient
+	// credentials (cookies); a signature over the body is not one. The
+	// address limit caps how many signatures anyone can make the server
+	// check; the interval of each station is enforced by the service.
+	devices := middleware.RateLimit(security.NewRateLimiter(120, time.Minute), rd)
+	outer := http.NewServeMux()
+	outer.Handle("POST /api/stations/{id}/readings", devices(http.HandlerFunc(stations.SubmitReading)))
+	outer.Handle("/", site)
+
+	// From the outside in: recover from panics, log the request, then
+	// either the site or the stations' route.
+	var root http.Handler = outer
 	root = middleware.Logging(log)(root)
 	root = middleware.Recover(log)(root)
 	return root, nil

@@ -189,7 +189,10 @@ func (rd *Renderer) Reject(w http.ResponseWriter, r *http.Request, status int, c
 // that show the message inside a page. Anything it does not recognize is an
 // internal error, whose cause is never part of the message.
 func (rd *Renderer) Describe(err error) (status int, code, message, field string) {
-	var invalid *domain.ValidationError
+	var (
+		invalid *domain.ValidationError
+		tooSoon *domain.TooSoonError
+	)
 	switch {
 	case errors.As(err, &invalid):
 		return http.StatusBadRequest, "invalid_parameter", invalid.Message, invalid.Field
@@ -208,6 +211,14 @@ func (rd *Renderer) Describe(err error) (status int, code, message, field string
 			"Esta estação é coletada de um instituto: os dados vêm da fonte. Ela só pode ser ativada ou desativada.", ""
 	case errors.Is(err, domain.ErrStationCodeTaken):
 		return http.StatusConflict, "station_code_taken", "Já existe uma estação particular com este código.", "external_code"
+	case errors.Is(err, domain.ErrKeyTaken):
+		return http.StatusConflict, "key_taken", "Esta chave já está em uso por outra estação.", "public_key"
+	case errors.Is(err, domain.ErrInvalidSignature):
+		return http.StatusUnauthorized, "invalid_signature", "Assinatura ausente ou inválida para a chave desta estação.", ""
+	case errors.Is(err, domain.ErrUplinkDisabled):
+		return http.StatusForbidden, "uplink_disabled", "Esta estação não está configurada para enviar leituras.", ""
+	case errors.As(err, &tooSoon):
+		return http.StatusTooManyRequests, "too_soon", "Envio antes do fim do intervalo combinado para esta estação.", ""
 	case errors.Is(err, domain.ErrTooManyRequests):
 		return http.StatusTooManyRequests, "too_many_requests", "Muitas tentativas. Aguarde um minuto e tente de novo.", ""
 	default:

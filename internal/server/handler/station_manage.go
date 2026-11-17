@@ -100,7 +100,7 @@ func (h *StationHandler) PanelRows(w http.ResponseWriter, r *http.Request) {
 func (h *StationHandler) NewStationForm(w http.ResponseWriter, r *http.Request) {
 	data := newPageData(r, "")
 	data.Form = map[string]string{"active": "on"}
-	data.Data = newStationFormView(nil)
+	data.Data = newStationFormView(r, nil)
 	h.render.HTML(w, r, http.StatusOK, "station_form", data)
 }
 
@@ -117,7 +117,7 @@ func (h *StationHandler) CreateFromForm(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		data := newPageData(r, "")
 		data.Form = typed
-		data.Data = newStationFormView(nil)
+		data.Data = newStationFormView(r, nil)
 		showFormError(h.render, w, r, "station_form", data, err)
 		return
 	}
@@ -141,7 +141,7 @@ func (h *StationHandler) EditStationForm(w http.ResponseWriter, r *http.Request)
 	}
 	data := newPageData(r, "")
 	data.Form = stationFormValues(station)
-	data.Data = newStationFormView(&station)
+	data.Data = newStationFormView(r, &station)
 	h.render.HTML(w, r, http.StatusOK, "station_form", data)
 }
 
@@ -170,7 +170,7 @@ func (h *StationHandler) UpdateFromForm(w http.ResponseWriter, r *http.Request) 
 		}
 		data := newPageData(r, "")
 		data.Form = typed
-		data.Data = newStationFormView(&station)
+		data.Data = newStationFormView(r, &station)
 		showFormError(h.render, w, r, "station_form", data, err)
 		return
 	}
@@ -237,17 +237,27 @@ func (h *StationHandler) DeleteFromForm(w http.ResponseWriter, r *http.Request) 
 // the decimal separator, as people write them in Brazil.
 func stationInputFromForm(r *http.Request) (domain.StationInput, map[string]string, error) {
 	typed := map[string]string{
-		"name":          r.PostFormValue("name"),
-		"external_code": r.PostFormValue("external_code"),
-		"lat":           r.PostFormValue("lat"),
-		"lon":           r.PostFormValue("lon"),
-		"altitude_m":    r.PostFormValue("altitude_m"),
-		"active":        r.PostFormValue("active"),
+		"name":              r.PostFormValue("name"),
+		"external_code":     r.PostFormValue("external_code"),
+		"lat":               r.PostFormValue("lat"),
+		"lon":               r.PostFormValue("lon"),
+		"altitude_m":        r.PostFormValue("altitude_m"),
+		"active":            r.PostFormValue("active"),
+		"public_key":        r.PostFormValue("public_key"),
+		"report_interval_s": r.PostFormValue("report_interval_s"),
 	}
 	in := domain.StationInput{
 		Name:         typed["name"],
 		ExternalCode: typed["external_code"],
 		Active:       typed["active"] != "",
+		PublicKey:    typed["public_key"],
+	}
+	if raw := strings.TrimSpace(typed["report_interval_s"]); raw != "" {
+		seconds, err := strconv.ParseInt(raw, 10, 32)
+		if err != nil {
+			return in, typed, &domain.ValidationError{Field: "report_interval_s", Message: "Escolha um intervalo de envio da lista."}
+		}
+		in.ReportIntervalS = int32(seconds)
 	}
 
 	var ok bool
@@ -296,7 +306,28 @@ func stationFormValues(st domain.Station) map[string]string {
 	if st.Active {
 		values["active"] = "on"
 	}
+	values["public_key"] = st.PublicKey
+	if st.ReportIntervalS != nil {
+		values["report_interval_s"] = strconv.Itoa(int(*st.ReportIntervalS))
+	}
 	return values
+}
+
+// reportIntervals are the choices of the form, in seconds. The API accepts
+// any value from 60 to 86400.
+var reportIntervals = []struct {
+	Seconds int
+	Label   string
+}{
+	{60, "1 minuto"}, {300, "5 minutos"}, {600, "10 minutos"}, {900, "15 minutos"},
+	{1800, "30 minutos"}, {3600, "1 hora"}, {10800, "3 horas"}, {21600, "6 horas"},
+	{86400, "24 horas"},
+}
+
+var uplinkLabels = map[domain.UplinkStatus]string{
+	domain.UplinkWaiting: "aguardando o 1º envio",
+	domain.UplinkOK:      "envio em dia",
+	domain.UplinkLate:    "envio atrasado",
 }
 
 func panelURL(search string, offset int) string {
@@ -341,6 +372,8 @@ type panelRow struct {
 	Official    bool
 	Active      bool
 	Reading     string
+	Uplink      string // "", or the state of the station's own submissions
+	UplinkLate  bool
 	EditURL     string
 	ActiveURL   string
 	DeleteURL   string
@@ -403,12 +436,25 @@ func newPanelRow(st domain.Station, csrf string) panelRow {
 	if st.Latest != nil {
 		row.Reading = st.Latest.ObservedAt.In(saoPaulo).Format("02/01 às 15:04")
 	}
+	row.Uplink = uplinkLabels[st.UplinkStatus]
+	row.UplinkLate = st.UplinkStatus == domain.UplinkLate
 	return row
 }
 
 // stationFormView feeds the "station_form" page, for a new station (nil)
 // or for an existing one.
 type stationFormView struct {
+	Intervals []struct {
+		Seconds int
+		Label   string
+	}
+	// Sending, for a station that already has a key.
+	HasKey      bool
+	Fingerprint string
+	SubmitURL   string
+	Uplink      string
+	UplinkLate  bool
+	LastReport  string
 	New         bool
 	Heading     string
 	Action      string
@@ -421,12 +467,19 @@ type stationFormView struct {
 	ToggleLabel string
 }
 
-func newStationFormView(st *domain.Station) stationFormView {
+func newStationFormView(r *http.Request, st *domain.Station) stationFormView {
 	if st == nil {
-		return stationFormView{New: true, Heading: "Nova estação", Action: panelPath}
+		return stationFormView{New: true, Heading: "Nova estação", Action: panelPath, Intervals: reportIntervals}
 	}
 	row := newPanelRow(*st, "")
-	return stationFormView{
+	view := stationFormView{
+		Intervals:   reportIntervals,
+		HasKey:      st.PublicKey != "",
+		Fingerprint: st.KeyFingerprint,
+		SubmitURL:   submitURL(r, st.ID),
+		Uplink:      row.Uplink,
+		UplinkLate:  row.UplinkLate,
+		LastReport:  "nenhum",
 		Heading:     "Editar estação",
 		Action:      fmt.Sprintf("%s/%d", panelPath, st.ID),
 		Official:    st.IsOfficial(),
@@ -437,4 +490,19 @@ func newStationFormView(st *domain.Station) stationFormView {
 		NextActive:  row.NextActive,
 		ToggleLabel: row.ToggleLabel,
 	}
+	if st.LastReportAt != nil {
+		view.LastReport = st.LastReportAt.In(saoPaulo).Format("02/01/2006 às 15:04")
+	}
+	return view
+}
+
+// submitURL is the address the station sends its readings to, as the
+// browser reached the server. Behind a proxy that rewrites the host it may
+// differ; the path is what matters.
+func submitURL(r *http.Request, id int64) string {
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	return fmt.Sprintf("%s://%s/api/stations/%d/readings", scheme, r.Host, id)
 }

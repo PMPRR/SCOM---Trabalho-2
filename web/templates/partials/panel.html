@@ -46,6 +46,7 @@
     <td>
         {{if .Active}}<span class="panel-badge">Ativa</span>
         {{else}}<span class="panel-badge panel-badge-off">Desativada</span>{{end}}
+        {{if .Uplink}}<span class="panel-uplink{{if .UplinkLate}} panel-uplink-late{{end}}">{{.Uplink}}</span>{{end}}
     </td>
     <td>{{.Reading}}</td>
     <td>
