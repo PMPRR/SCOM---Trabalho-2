@@ -152,19 +152,18 @@
     if (alvo) alvo.textContent = texto;
   }
 
+  /* O mapa abre sempre. Sem estacoes com temperatura (um banco recem-criado,
+     antes da primeira coleta) ou sem resposta do servidor, ainda ha o que
+     mostrar: o Estado, o relevo, as divisas e o seletor de municipio. Os
+     campos que dependem das leituras ficam desabilitados, com o motivo. */
   carregarEstacoes().then(
     function (dados) {
-      /* Marcadores, campo de confianca e campo de temperatura partem das
-         estacoes com temperatura; sem nenhuma, nao ha mapa para montar. */
-      if (!dados.estacoes.length) {
-        avisar("Nenhuma estação com leitura de temperatura disponível no momento.");
-        return;
-      }
       montar(dados.estacoes, dados.pluviometros);
     },
     function (erro) {
       console.error("Falha ao carregar as estações:", erro);
-      avisar("Não foi possível carregar as estações. Tente novamente em instantes.");
+      montar([], []);
+      avisar("Não foi possível carregar as estações. O mapa mostra só a base; tente novamente em instantes.");
     }
   );
 
@@ -1289,7 +1288,7 @@
 
     function montarResumoVento() {
       const alvo = document.getElementById("vento-resumo");
-      if (!alvo) return;
+      if (!alvo || !VENTOS.length) return;
 
       const velocidades = ESTACOES.map(function (e) { return e.vento; });
       const soma = VENTOS.reduce(function (acc, w) {
@@ -1309,7 +1308,12 @@
     mapa.on("zoomend moveend", desenharVento);
     camadaVento.on("add", desenharVento);
 
-    if (typeof ClimaCampo !== "undefined") {
+    /* Os campos de confianca e de temperatura e o vento partem das estacoes
+       com temperatura. Sem nenhuma, nao sao montados: um campo interpolado de
+       nada mostraria um valor inventado no Estado inteiro. */
+    const SEM_TEMPERATURA = ESTACOES.length === 0;
+
+    if (typeof ClimaCampo !== "undefined" && !SEM_TEMPERATURA) {
       const campo = ClimaCampo.construir({
         limites: LIMITES,
         malha: window.SP_GEOJSON,
@@ -1529,6 +1533,27 @@
       if (opcaoChuva) opcaoChuva.disabled = true;
       const avisoChuva = document.getElementById("chuva-aviso");
       if (avisoChuva) avisoChuva.hidden = false;
+    }
+
+    /* Sem estacoes com temperatura, temperatura, confianca e vento ficam
+       desabilitados, e o mapa abre no campo de chuva, se houver, ou sem campo
+       nenhum. Tudo antes de as opcoes serem aplicadas, logo abaixo. */
+    if (SEM_TEMPERATURA) {
+      ["campo-temperatura", "campo-confianca", "camada-vento"].forEach(function (id) {
+        const controle = document.getElementById(id);
+        if (!controle) return;
+        controle.checked = false;
+        controle.disabled = true;
+      });
+      const opcaoChuva = document.getElementById("campo-chuva");
+      const reserva = opcaoChuva && !opcaoChuva.disabled
+        ? opcaoChuva
+        : document.getElementById("campo-nenhum");
+      if (reserva) reserva.checked = true;
+      ["temperatura-aviso", "vento-aviso"].forEach(function (id) {
+        const aviso = document.getElementById(id);
+        if (aviso) aviso.hidden = false;
+      });
     }
 
     /* LEGENDAS vale para as opcoes de radio; estas sao as legendas das caixas
@@ -1796,9 +1821,11 @@
       });
 
       if (status) {
-        status.textContent =
-          estacoes.length + " estações com temperatura e " + SO_CHUVA.length +
-          " pluviômetros exibidos no mapa.";
+        status.textContent = estacoes.length
+          ? estacoes.length + " estações com temperatura e " + SO_CHUVA.length +
+            " pluviômetros exibidos no mapa."
+          : "Nenhuma estação com leitura de temperatura no momento" +
+            (SO_CHUVA.length ? "; " + SO_CHUVA.length + " pluviômetros exibidos no mapa." : ".");
       }
     }
 

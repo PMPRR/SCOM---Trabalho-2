@@ -75,6 +75,10 @@
                     <p class="layer-toggle-desc" id="campo-confianca-desc">Onde há estações próximas e leituras recentes.</p>
                     <span class="layer-preview layer-preview-confianca" aria-hidden="true"></span>
                 </div>
+                <p class="layer-toggles-hint" id="temperatura-aviso" hidden>
+                Temperatura e confiança indisponíveis: nenhuma estação com
+                leitura de temperatura no momento.
+                </p>
 
                 <div class="layer-toggle">
                     <input type="radio" id="campo-nenhum" name="campo" value="nenhum" data-campo aria-describedby="campo-nenhum-desc">
@@ -127,6 +131,9 @@
                     <label for="camada-vento">Vento</label>
                     <p class="layer-toggle-desc" id="camada-vento-desc">Setas que apontam para onde o vento sopra.</p>
                 </div>
+                <p class="layer-toggles-hint" id="vento-aviso" hidden>
+                Vento indisponível: nenhuma estação com leitura no momento.
+                </p>
 
                 <div class="layer-toggle">
                     <input type="checkbox" id="camada-municipios" data-camada="municipios" aria-describedby="camada-municipios-desc">
@@ -147,7 +154,7 @@
                         </div>
                         <div class="legend-item">
                             <dt><span class="legend-swatch legend-swatch-medium" aria-hidden="true"></span>Confiança média</dt>
-                            <dd>Estação privada com leitura recente.</dd>
+                            <dd>Estação particular com leitura recente.</dd>
                         </div>
                         <div class="legend-item">
                             <dt><span class="legend-swatch legend-swatch-low" aria-hidden="true"></span>Confiança baixa</dt>
