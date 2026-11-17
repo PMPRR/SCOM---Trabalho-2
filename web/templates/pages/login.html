@@ -13,10 +13,20 @@
         <section class="auth-card" aria-labelledby="login-heading">
             <h1 id="login-heading">Entrar</h1>
             <p class="auth-lede">
-                Entre para voltar direto às estações que você acompanha.
+                Entre para cadastrar e gerenciar as suas estações.
             </p>
 
-            <form class="auth-form" action="#" method="post">
+            <!-- O formulario funciona de dois jeitos. Com HTMX (hx-post), so a
+                area de aviso e trocada em caso de erro e o servidor manda
+                redirecionar em caso de sucesso. Sem JavaScript, action e
+                method fazem o envio comum, e o servidor responde com a pagina. -->
+            <form class="auth-form" action="/entrar" method="post"
+                hx-post="/entrar" hx-target="#auth-aviso" hx-swap="innerHTML">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <!-- O aviso de erro fica aqui. Com HTMX, o servidor responde so
+                    com o fragmento do erro, que entra nesta area; sem JavaScript,
+                    a pagina volta inteira ja com a mensagem. -->
+                <div class="auth-aviso" id="auth-aviso" role="alert">{{if .FormError}}<p class="request-error">{{.FormError}}</p>{{end}}</div>
                 <div class="field">
                     <label class="field-label" for="email">E-mail</label>
                     <input class="field-input"
@@ -25,6 +35,7 @@
                         name="email"
                         autocomplete="email"
                         inputmode="email"
+                        value="{{index .Form "email"}}"
                         required>
                 </div>
 
@@ -49,7 +60,6 @@
                 </div>
 
                 <button class="btn btn-primary" type="submit">Entrar</button>
-                <p class="auth-aviso" id="auth-aviso" role="status" hidden></p>
 
             </form>
 

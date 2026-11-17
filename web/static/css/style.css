@@ -366,6 +366,37 @@ a {
     background-color: var(--c-bg);
     color: var(--c-accent);
 }
+
+/* "Sair" e um botao de formulario (POST), com a mesma aparencia dos links
+   do menu. */
+.site-account-logout {
+    display: flex;
+    align-items: center;
+    inline-size: 100%;
+    min-height: 2.75rem;
+    padding-inline: var(--sp-3);
+    border: 0;
+    border-radius: var(--radius);
+    background-color: transparent;
+    color: var(--c-fg);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.site-account-logout:hover {
+    background-color: var(--c-bg);
+    color: var(--c-accent);
+}
+
+/* O nome do usuario substitui "Conta" no botao; nomes longos sao cortados
+   para nao empurrar o cabecalho. */
+.site-account-name {
+    max-inline-size: 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
  
 @media (max-width: 26em) {
     .site-header {

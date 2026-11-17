@@ -62,21 +62,19 @@
     font-size: var(--fs-sm);
 }
 
-/* Aviso de funcionalidade ausente. Nao e erro de preenchimento: a cor de
-   alerta ficaria mentirosa, porque o usuario nao errou nada. Fica no tom de
-   destaque, como uma nota do sistema. */
+/* Area do erro do formulario (credenciais recusadas, e-mail ja cadastrado,
+   campo invalido). Fica no tom de alerta, logo acima dos campos. */
 .auth-aviso {
     padding: var(--sp-3) var(--sp-4);
-    border-inline-start: 3px solid var(--c-accent);
+    border-inline-start: 3px solid var(--c-alert);
     border-radius: var(--radius);
     background-color: var(--c-bg);
     font-size: var(--fs-sm);
-    color: var(--c-fg);
 }
 
-/* display inicial vence o hidden do navegador quando o elemento volta a
-   aparecer; a regra explicita evita depender da ordem das folhas. */
-.auth-aviso[hidden] {
+/* A area de aviso existe sempre, para o HTMX ter onde colocar o erro; vazia,
+   ela nao ocupa espaco. */
+.auth-aviso:empty {
     display: none;
 }
 
@@ -220,4 +218,73 @@ select.field-input {
 .auth-list li {
     padding-inline-start: var(--sp-4);
     border-inline-start: 2px solid var(--c-line);
+}
+
+/* ==========================================================================
+   Pagina da conta e lista de usuarios
+   ========================================================================== */
+
+.account {
+    width: min(100% - 2 * var(--gutter), var(--wrap));
+    margin-inline: auto;
+    padding-block: var(--sp-6);
+}
+
+.account-card {
+    max-inline-size: 36rem;
+    margin-block-start: var(--sp-5);
+    padding: var(--sp-6);
+    background-color: var(--c-surface);
+    border: 1px solid var(--c-line);
+    border-radius: var(--radius);
+}
+
+.account-data {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--sp-2) var(--sp-5);
+}
+
+.account-data dt {
+    color: var(--c-muted);
+}
+
+.account-data dd {
+    margin: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.account-actions {
+    margin-block-start: var(--sp-5);
+}
+
+/* A tabela rola dentro da propria moldura em telas estreitas, em vez de
+   alargar a pagina. */
+.table-scroll {
+    margin-block-start: var(--sp-5);
+    overflow-x: auto;
+}
+
+.users-table {
+    inline-size: 100%;
+    border-collapse: collapse;
+}
+
+.users-table caption {
+    padding-block-end: var(--sp-3);
+    color: var(--c-muted);
+    text-align: start;
+}
+
+.users-table th,
+.users-table td {
+    padding: var(--sp-3) var(--sp-4);
+    border-block-end: 1px solid var(--c-line);
+    text-align: start;
+}
+
+.users-table th {
+    color: var(--c-muted);
+    font-size: var(--fs-sm);
 }

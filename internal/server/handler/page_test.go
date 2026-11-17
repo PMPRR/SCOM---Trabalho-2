@@ -20,12 +20,13 @@ func newPageServer(t *testing.T) http.Handler {
 		t.Fatalf("load templates: %v", err)
 	}
 	h := NewPageHandler(rd)
+	auth := NewAuthHandler(nil, rd, false) // the form pages never reach the service
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", h.Home)
 	mux.HandleFunc("GET /mapa", h.Map)
-	mux.HandleFunc("GET /entrar", h.Login)
-	mux.HandleFunc("GET /cadastro", h.Signup)
+	mux.HandleFunc("GET /entrar", auth.LoginPage)
+	mux.HandleFunc("GET /cadastro", auth.SignupPage)
 	return mux
 }
 

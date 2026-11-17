@@ -1,0 +1,42 @@
+{{define "title"}}Usuários - ClimaSP{{end}}
+
+{{define "description"}}Contas cadastradas no ClimaSP. Página restrita a administradores.{{end}}
+
+{{define "head_page"}}
+<link rel="stylesheet" href="/static/css/auth.css">
+{{end}}
+
+{{define "content"}}
+<main id="content">
+    <div class="account">
+        <h1>Usuários</h1>
+
+        <div class="table-scroll">
+            <table class="users-table">
+                <caption>
+                    {{len .Data}} {{if eq (len .Data) 1}}conta cadastrada{{else}}contas cadastradas{{end}}.
+                    Página visível apenas para administradores.
+                </caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Nome</th>
+                        <th scope="col">E-mail</th>
+                        <th scope="col">Perfil</th>
+                        <th scope="col">Desde</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Data}}
+                    <tr>
+                        <td>{{.Name}}</td>
+                        <td>{{.Email}}</td>
+                        <td>{{.Role}}</td>
+                        <td>{{.Since}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+{{end}}
