@@ -14,7 +14,10 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/PMPRR/SCOM---Trabalho-2/internal/config"
+	"github.com/PMPRR/SCOM---Trabalho-2/internal/ingest"
+	"github.com/PMPRR/SCOM---Trabalho-2/internal/repository"
 	"github.com/PMPRR/SCOM---Trabalho-2/internal/server"
+	"github.com/PMPRR/SCOM---Trabalho-2/internal/service"
 )
 
 func main() {
@@ -54,6 +57,18 @@ func run(log *slog.Logger) error {
 		Addr:              cfg.Addr,
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	// Collection of external readings, in the background. It stops with ctx,
+	// together with the server.
+	if cfg.IngestInterval > 0 {
+		collector := service.NewIngestService(
+			ingest.Sources(&http.Client{Timeout: 60 * time.Second}, cfg.IngestCredentials()),
+			repository.NewReadingRepository(pool),
+			log,
+		)
+		go collector.Run(ctx, cfg.IngestInterval)
+		log.Info("ingest scheduled", "interval", cfg.IngestInterval)
 	}
 
 	errCh := make(chan error, 1)
