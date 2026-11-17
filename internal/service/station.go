@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/PMPRR/SCOM---Trabalho-2/internal/domain"
@@ -17,8 +18,12 @@ const (
 
 // StationRepository is what the service needs from the data layer.
 type StationRepository interface {
-	List(ctx context.Context, limit, offset int) ([]domain.Station, int, error)
+	List(ctx context.Context, filter domain.StationFilter, limit, offset int) ([]domain.Station, int, error)
 	Get(ctx context.Context, id int64) (domain.Station, error)
+	Create(ctx context.Context, ownerID int64, in domain.StationInput) (int64, error)
+	Update(ctx context.Context, id int64, in domain.StationInput) error
+	SetActive(ctx context.Context, id int64, active bool) error
+	Delete(ctx context.Context, id int64) error
 }
 
 // Page describes which slice of a listing was returned.
@@ -37,11 +42,12 @@ var modelInstitutes = map[string]bool{"openmeteo": true}
 
 type StationService struct {
 	repo StationRepository
+	log  *slog.Logger
 	now  func() time.Time
 }
 
-func NewStationService(repo StationRepository) *StationService {
-	return &StationService{repo: repo, now: time.Now}
+func NewStationService(repo StationRepository, log *slog.Logger) *StationService {
+	return &StationService{repo: repo, log: log, now: time.Now}
 }
 
 // confidenceOf ranks the latest reading of a station. From most to least
@@ -64,23 +70,19 @@ func confidenceOf(st domain.Station, now time.Time) domain.Confidence {
 	}
 }
 
-// List returns one page of stations. Limit must be between 1 and
-// MaxPageLimit and offset must not be negative.
+// List returns one page of the stations open to the public: those turned
+// on. Limit must be between 1 and MaxPageLimit and offset must not be
+// negative.
 func (s *StationService) List(ctx context.Context, limit, offset int) ([]domain.Station, Page, error) {
-	if limit < 1 || limit > MaxPageLimit {
-		return nil, Page{}, &domain.ValidationError{
-			Field:   "limit",
-			Message: fmt.Sprintf("O limite deve estar entre 1 e %d.", MaxPageLimit),
-		}
-	}
-	if offset < 0 {
-		return nil, Page{}, &domain.ValidationError{
-			Field:   "offset",
-			Message: "O deslocamento não pode ser negativo.",
-		}
+	return s.list(ctx, domain.StationFilter{ActiveOnly: true}, limit, offset)
+}
+
+func (s *StationService) list(ctx context.Context, filter domain.StationFilter, limit, offset int) ([]domain.Station, Page, error) {
+	if err := checkPage(limit, offset); err != nil {
+		return nil, Page{}, err
 	}
 
-	stations, total, err := s.repo.List(ctx, limit, offset)
+	stations, total, err := s.repo.List(ctx, filter, limit, offset)
 	if err != nil {
 		return nil, Page{}, err
 	}
@@ -91,8 +93,37 @@ func (s *StationService) List(ctx context.Context, limit, offset int) ([]domain.
 	return stations, Page{Limit: limit, Offset: offset, Total: total}, nil
 }
 
-// Get returns one station, or domain.ErrNotFound.
+func checkPage(limit, offset int) error {
+	if limit < 1 || limit > MaxPageLimit {
+		return &domain.ValidationError{
+			Field:   "limit",
+			Message: fmt.Sprintf("O limite deve estar entre 1 e %d.", MaxPageLimit),
+		}
+	}
+	if offset < 0 {
+		return &domain.ValidationError{
+			Field:   "offset",
+			Message: "O deslocamento não pode ser negativo.",
+		}
+	}
+	return nil
+}
+
+// Get returns one station open to the public, or domain.ErrNotFound. A
+// station turned off is not found here; its manager still reaches it with
+// GetManaged.
 func (s *StationService) Get(ctx context.Context, id int64) (domain.Station, error) {
+	station, err := s.get(ctx, id)
+	if err != nil {
+		return domain.Station{}, err
+	}
+	if !station.Active {
+		return domain.Station{}, domain.ErrNotFound
+	}
+	return station, nil
+}
+
+func (s *StationService) get(ctx context.Context, id int64) (domain.Station, error) {
 	if id < 1 {
 		return domain.Station{}, &domain.ValidationError{
 			Field:   "id",
@@ -106,4 +137,3 @@ func (s *StationService) Get(ctx context.Context, id int64) (domain.Station, err
 	station.Confidence = confidenceOf(station, s.now())
 	return station, nil
 }
-

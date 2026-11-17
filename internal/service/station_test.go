@@ -3,25 +3,44 @@ package service
 import (
 	"context"
 	"errors"
+	"io"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/PMPRR/SCOM---Trabalho-2/internal/domain"
 )
 
-// fakeRepo is an in-memory StationRepository.
+// fakeRepo is an in-memory StationRepository. It applies filters the way
+// the SQL of the repository does, and records the writes it receives.
 type fakeRepo struct {
 	stations []domain.Station
 	calls    int
+	filters  []domain.StationFilter
 }
 
-func (f *fakeRepo) List(_ context.Context, limit, offset int) ([]domain.Station, int, error) {
+func (f *fakeRepo) List(_ context.Context, filter domain.StationFilter, limit, offset int) ([]domain.Station, int, error) {
 	f.calls++
-	page := make([]domain.Station, 0)
-	for i := offset; i < len(f.stations) && len(page) < limit; i++ {
-		page = append(page, f.stations[i])
+	f.filters = append(f.filters, filter)
+	matched := make([]domain.Station, 0)
+	for _, st := range f.stations {
+		if filter.ActiveOnly && !st.Active {
+			continue
+		}
+		if filter.OwnerID != nil && (st.OwnerID == nil || *st.OwnerID != *filter.OwnerID) {
+			continue
+		}
+		if filter.Search != "" && !strings.Contains(strings.ToLower(st.Name), strings.ToLower(filter.Search)) {
+			continue
+		}
+		matched = append(matched, st)
 	}
-	return page, len(f.stations), nil
+	page := make([]domain.Station, 0)
+	for i := offset; i < len(matched) && len(page) < limit; i++ {
+		page = append(page, matched[i])
+	}
+	return page, len(matched), nil
 }
 
 func (f *fakeRepo) Get(_ context.Context, id int64) (domain.Station, error) {
@@ -34,14 +53,65 @@ func (f *fakeRepo) Get(_ context.Context, id int64) (domain.Station, error) {
 	return domain.Station{}, domain.ErrNotFound
 }
 
+func (f *fakeRepo) find(id int64) *domain.Station {
+	for i := range f.stations {
+		if f.stations[i].ID == id {
+			return &f.stations[i]
+		}
+	}
+	return nil
+}
+
+func (f *fakeRepo) Create(_ context.Context, ownerID int64, in domain.StationInput) (int64, error) {
+	f.calls++
+	id := int64(len(f.stations) + 100)
+	owner := ownerID
+	f.stations = append(f.stations, domain.Station{
+		ID: id, InstituteCode: domain.OperatorInstitute, ExternalCode: in.ExternalCode, Name: in.Name,
+		Lat: in.Lat, Lon: in.Lon, AltitudeM: in.AltitudeM, Active: in.Active, OwnerID: &owner,
+	})
+	return id, nil
+}
+
+func (f *fakeRepo) Update(_ context.Context, id int64, in domain.StationInput) error {
+	f.calls++
+	st := f.find(id)
+	if st == nil {
+		return domain.ErrNotFound
+	}
+	st.ExternalCode, st.Name, st.Lat, st.Lon, st.AltitudeM, st.Active = in.ExternalCode, in.Name, in.Lat, in.Lon, in.AltitudeM, in.Active
+	return nil
+}
+
+func (f *fakeRepo) SetActive(_ context.Context, id int64, active bool) error {
+	f.calls++
+	st := f.find(id)
+	if st == nil {
+		return domain.ErrNotFound
+	}
+	st.Active = active
+	return nil
+}
+
+func (f *fakeRepo) Delete(_ context.Context, id int64) error {
+	f.calls++
+	for i, st := range f.stations {
+		if st.ID == id {
+			f.stations = append(f.stations[:i], f.stations[i+1:]...)
+			return nil
+		}
+	}
+	return domain.ErrNotFound
+}
+
 func threeStations() *fakeRepo {
 	return &fakeRepo{stations: []domain.Station{
-		{ID: 1, Name: "Jales"}, {ID: 2, Name: "Santos"}, {ID: 3, Name: "Campinas"},
+		{ID: 1, Name: "Jales", Active: true}, {ID: 2, Name: "Santos", Active: true}, {ID: 3, Name: "Campinas", Active: true},
 	}}
 }
 
 func TestListReturnsRequestedPage(t *testing.T) {
-	svc := NewStationService(threeStations())
+	svc := newService(threeStations())
 
 	stations, page, err := svc.List(context.Background(), 2, 1)
 	if err != nil {
@@ -68,7 +138,7 @@ func TestListRejectsOutOfRangePagination(t *testing.T) {
 	}
 	for _, c := range cases {
 		repo := threeStations()
-		_, _, err := NewStationService(repo).List(context.Background(), c.limit, c.offset)
+		_, _, err := newService(repo).List(context.Background(), c.limit, c.offset)
 
 		var invalid *domain.ValidationError
 		if !errors.As(err, &invalid) {
@@ -85,13 +155,13 @@ func TestListRejectsOutOfRangePagination(t *testing.T) {
 }
 
 func TestListAcceptsMaximumLimit(t *testing.T) {
-	if _, _, err := NewStationService(threeStations()).List(context.Background(), MaxPageLimit, 0); err != nil {
+	if _, _, err := newService(threeStations()).List(context.Background(), MaxPageLimit, 0); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
 
 func TestGetReturnsStation(t *testing.T) {
-	st, err := NewStationService(threeStations()).Get(context.Background(), 2)
+	st, err := newService(threeStations()).Get(context.Background(), 2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -101,7 +171,7 @@ func TestGetReturnsStation(t *testing.T) {
 }
 
 func TestGetUnknownStationIsNotFound(t *testing.T) {
-	_, err := NewStationService(threeStations()).Get(context.Background(), 99)
+	_, err := newService(threeStations()).Get(context.Background(), 99)
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
@@ -109,7 +179,7 @@ func TestGetUnknownStationIsNotFound(t *testing.T) {
 
 func TestGetRejectsNonPositiveID(t *testing.T) {
 	for _, id := range []int64{0, -5} {
-		_, err := NewStationService(threeStations()).Get(context.Background(), id)
+		_, err := newService(threeStations()).Get(context.Background(), id)
 		var invalid *domain.ValidationError
 		if !errors.As(err, &invalid) {
 			t.Errorf("id %d: err = %v, want ValidationError", id, err)
@@ -144,9 +214,9 @@ func TestConfidenceRanksSourcesAndAge(t *testing.T) {
 func TestListAndGetFillConfidence(t *testing.T) {
 	now := time.Date(2026, 11, 16, 22, 0, 0, 0, time.UTC)
 	repo := &fakeRepo{stations: []domain.Station{
-		{ID: 1, InstituteCode: "inmet", Latest: &domain.Observation{ObservedAt: now.Add(-time.Hour)}},
+		{ID: 1, InstituteCode: "inmet", Active: true, Latest: &domain.Observation{ObservedAt: now.Add(-time.Hour)}},
 	}}
-	svc := NewStationService(repo)
+	svc := newService(repo)
 	svc.now = func() time.Time { return now }
 
 	stations, _, err := svc.List(context.Background(), 10, 0)
@@ -159,3 +229,6 @@ func TestListAndGetFillConfidence(t *testing.T) {
 	}
 }
 
+func newService(repo StationRepository) *StationService {
+	return NewStationService(repo, slog.New(slog.NewTextHandler(io.Discard, nil)))
+}

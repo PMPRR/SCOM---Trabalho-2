@@ -50,7 +50,7 @@ func NewRouter(log *slog.Logger, db *pgxpool.Pool, dev bool) (http.Handler, erro
 	pages := handler.NewPageHandler(rd)
 	auth := handler.NewAuthHandler(authService, rd, secureCookies)
 	stations := handler.NewStationHandler(
-		service.NewStationService(repository.NewStationRepository(db)), rd,
+		service.NewStationService(repository.NewStationRepository(db), log), rd,
 	)
 
 	// Access rules, applied per route.

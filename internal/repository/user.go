@@ -6,14 +6,10 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/PMPRR/SCOM---Trabalho-2/internal/domain"
 )
-
-// uniqueViolation is the PostgreSQL error code for a broken UNIQUE constraint.
-const uniqueViolation = "23505"
 
 // UserRepository reads and writes users. Every value reaches the database
 // as a query parameter ($1, $2...), never concatenated into the SQL text,
@@ -38,8 +34,7 @@ VALUES ($1, $2, $3, $4)
 RETURNING `+userColumns, email, name, passwordHash, string(role))
 
 	user, err := scanUser(row)
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
+	if isUniqueViolation(err) {
 		return domain.User{}, domain.ErrEmailTaken
 	}
 	if err != nil {

@@ -24,7 +24,7 @@ func newFragmentServer(t *testing.T, repo *fakeRepo) http.Handler {
 	if err := rd.LoadTemplates(os.DirFS("../../../web/templates")); err != nil {
 		t.Fatalf("load templates: %v", err)
 	}
-	h := NewStationHandler(service.NewStationService(repo), rd)
+	h := NewStationHandler(service.NewStationService(repo, slog.New(slog.NewTextHandler(io.Discard, nil))), rd)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /estacoes", h.Cards)
@@ -50,7 +50,7 @@ func manyStations(n int) *fakeRepo {
 	repo := &fakeRepo{}
 	for i := 1; i <= n; i++ {
 		repo.stations = append(repo.stations, domain.Station{
-			ID: int64(i), Name: fmt.Sprintf("Estação %d", i), InstituteName: "INMET", InstituteCode: "inmet",
+			ID: int64(i), Name: fmt.Sprintf("Estação %d", i), InstituteName: "INMET", InstituteCode: "inmet", Active: true,
 			Latest: &domain.Observation{ObservedAt: time.Now().Add(-10 * time.Minute), TemperatureC: f32(20)},
 		})
 	}
@@ -111,7 +111,7 @@ func TestCardsEmptyDatabase(t *testing.T) {
 func TestCardFormatsTheReading(t *testing.T) {
 	owner := int64(3)
 	repo := &fakeRepo{stations: []domain.Station{{
-		ID: 7, Name: "Sorocaba - Campus", InstituteName: "Estação privada", InstituteCode: "privada", OwnerID: &owner,
+		ID: 7, Name: "Sorocaba - Campus", InstituteName: "Estação privada", InstituteCode: "privada", OwnerID: &owner, Active: true,
 		Latest: &domain.Observation{
 			ObservedAt:   time.Now().Add(-20 * time.Minute),
 			TemperatureC: f32(24.13), WindSpeedMS: f32(3.33), WindDirDeg: i16(160),
@@ -141,7 +141,7 @@ func TestCardFormatsTheReading(t *testing.T) {
 }
 
 func TestCardWithoutReading(t *testing.T) {
-	repo := &fakeRepo{stations: []domain.Station{{ID: 1, Name: "Nova", InstituteName: "INMET"}}}
+	repo := &fakeRepo{stations: []domain.Station{{ID: 1, Name: "Nova", InstituteName: "INMET", Active: true}}}
 
 	body := getHTMX(t, newFragmentServer(t, repo), "/estacoes/1").Body.String()
 
@@ -151,7 +151,7 @@ func TestCardWithoutReading(t *testing.T) {
 }
 
 func TestCardEscapesStationName(t *testing.T) {
-	repo := &fakeRepo{stations: []domain.Station{{ID: 1, Name: `<script>alert(1)</script>`, InstituteName: `"><img src=x onerror=alert(1)>`}}}
+	repo := &fakeRepo{stations: []domain.Station{{ID: 1, Name: `<script>alert(1)</script>`, InstituteName: `"><img src=x onerror=alert(1)>`, Active: true}}}
 
 	body := getHTMX(t, newFragmentServer(t, repo), "/estacoes/1").Body.String()
 

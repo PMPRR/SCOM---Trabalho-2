@@ -17,21 +17,47 @@ import (
 )
 
 // fakeRepo stands in for the database, so these tests exercise the real
-// handler and the real service together.
+// handler and the real service together. It applies filters the way the
+// SQL of the repository does.
 type fakeRepo struct {
 	stations []domain.Station
 	err      error
 }
 
-func (f *fakeRepo) List(_ context.Context, limit, offset int) ([]domain.Station, int, error) {
+func (f *fakeRepo) List(_ context.Context, filter domain.StationFilter, limit, offset int) ([]domain.Station, int, error) {
 	if f.err != nil {
 		return nil, 0, f.err
 	}
-	page := make([]domain.Station, 0)
-	for i := offset; i < len(f.stations) && len(page) < limit; i++ {
-		page = append(page, f.stations[i])
+	matched := make([]domain.Station, 0)
+	for _, st := range f.stations {
+		if stationMatches(st, filter) {
+			matched = append(matched, st)
+		}
 	}
-	return page, len(f.stations), nil
+	if filter.NewestFirst {
+		for i, j := 0, len(matched)-1; i < j; i, j = i+1, j-1 {
+			matched[i], matched[j] = matched[j], matched[i]
+		}
+	}
+	page := make([]domain.Station, 0)
+	for i := offset; i < len(matched) && len(page) < limit; i++ {
+		page = append(page, matched[i])
+	}
+	return page, len(matched), nil
+}
+
+func stationMatches(st domain.Station, filter domain.StationFilter) bool {
+	if filter.ActiveOnly && !st.Active {
+		return false
+	}
+	if filter.OwnerID != nil && (st.OwnerID == nil || *st.OwnerID != *filter.OwnerID) {
+		return false
+	}
+	if q := strings.ToLower(filter.Search); q != "" &&
+		!strings.Contains(strings.ToLower(st.Name), q) && !strings.Contains(strings.ToLower(st.ExternalCode), q) {
+		return false
+	}
+	return true
 }
 
 func (f *fakeRepo) Get(_ context.Context, id int64) (domain.Station, error) {
@@ -46,15 +72,71 @@ func (f *fakeRepo) Get(_ context.Context, id int64) (domain.Station, error) {
 	return domain.Station{}, domain.ErrNotFound
 }
 
+func (f *fakeRepo) Create(_ context.Context, ownerID int64, in domain.StationInput) (int64, error) {
+	var id int64
+	for _, st := range f.stations {
+		if st.InstituteCode == domain.OperatorInstitute && st.ExternalCode == in.ExternalCode {
+			return 0, domain.ErrStationCodeTaken
+		}
+		id = max(id, st.ID)
+	}
+	id++
+	owner := ownerID
+	f.stations = append(f.stations, domain.Station{
+		ID: id, InstituteCode: domain.OperatorInstitute, InstituteName: "Estação particular",
+		ExternalCode: in.ExternalCode, Name: in.Name, Lat: in.Lat, Lon: in.Lon,
+		AltitudeM: in.AltitudeM, Active: in.Active, OwnerID: &owner,
+	})
+	return id, nil
+}
+
+func (f *fakeRepo) find(id int64) *domain.Station {
+	for i := range f.stations {
+		if f.stations[i].ID == id {
+			return &f.stations[i]
+		}
+	}
+	return nil
+}
+
+func (f *fakeRepo) Update(_ context.Context, id int64, in domain.StationInput) error {
+	st := f.find(id)
+	if st == nil {
+		return domain.ErrNotFound
+	}
+	st.ExternalCode, st.Name, st.Lat, st.Lon = in.ExternalCode, in.Name, in.Lat, in.Lon
+	st.AltitudeM, st.Active = in.AltitudeM, in.Active
+	return nil
+}
+
+func (f *fakeRepo) SetActive(_ context.Context, id int64, active bool) error {
+	st := f.find(id)
+	if st == nil {
+		return domain.ErrNotFound
+	}
+	st.Active = active
+	return nil
+}
+
+func (f *fakeRepo) Delete(_ context.Context, id int64) error {
+	for i, st := range f.stations {
+		if st.ID == id {
+			f.stations = append(f.stations[:i], f.stations[i+1:]...)
+			return nil
+		}
+	}
+	return domain.ErrNotFound
+}
+
 func threeStations() *fakeRepo {
 	return &fakeRepo{stations: []domain.Station{
-		{ID: 1, Name: "Jales"}, {ID: 2, Name: "Santos"}, {ID: 3, Name: "Campinas"},
+		{ID: 1, Name: "Jales", Active: true}, {ID: 2, Name: "Santos", Active: true}, {ID: 3, Name: "Campinas", Active: true},
 	}}
 }
 
 func newTestServer(repo *fakeRepo, dev bool) http.Handler {
 	rd := render.New(slog.New(slog.NewTextHandler(io.Discard, nil)), dev)
-	h := NewStationHandler(service.NewStationService(repo), rd)
+	h := NewStationHandler(service.NewStationService(repo, slog.New(slog.NewTextHandler(io.Discard, nil))), rd)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/stations", h.List)
@@ -164,4 +246,3 @@ func TestInternalErrorHidesCauseOutsideDev(t *testing.T) {
 		t.Errorf("development response should carry the cause: %s", dev.Body.String())
 	}
 }
-
