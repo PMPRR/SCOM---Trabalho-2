@@ -1,14 +1,59 @@
+# Sobe o ClimaSP inteiro: banco (PostGIS) e servidor.
+#   cp .env.example .env        # uma vez; troque a senha
+#   podman compose up -d --build   (ou: docker compose up -d --build, ou: make up)
+# O site fica em http://localhost:8080. Na partida o servidor espera o banco,
+# aplica as migrações e começa a coletar as fontes externas.
+#
+# Para desenvolver sem contêiner do servidor, suba só o banco (make db) e rode
+# o servidor na máquina (make run): a porta 5432 continua aberta, só para
+# esta máquina.
+
 services:
   db:
     image: docker.io/postgis/postgis:17-3.5
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?defina POSTGRES_USER no .env (cp .env.example .env)}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env (cp .env.example .env)}
+      POSTGRES_DB: ${POSTGRES_DB:?defina POSTGRES_DB no .env (cp .env.example .env)}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Por TCP: durante a inicialização a imagem sobe um servidor temporário
+      # só no socket local, que não deve contar como pronto.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: localhost/climasp:latest
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      APP_ADDR: ":8080"
+      # Dentro da rede do compose o banco se chama "db", não localhost.
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+      INGEST_INTERVAL: ${INGEST_INTERVAL:-1h}
+      CEMADEN_EMAIL: ${CEMADEN_EMAIL:-}
+      CEMADEN_PASSWORD: ${CEMADEN_PASSWORD:-}
+      CEMADEN_TOKEN: ${CEMADEN_TOKEN:-}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
 
 volumes:
   pgdata:

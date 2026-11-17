@@ -3,8 +3,20 @@ export
 
 COMPOSE ?= podman compose
 
-.PHONY: db run test ingest seed-dev promote-admin migrate-up migrate-down migrate-status schema schema-load
+.PHONY: up down logs db run test ingest seed-dev promote-admin migrate-up migrate-down migrate-status schema schema-load
 
+# Sobe tudo em conteineres: banco e servidor. O servidor espera o banco,
+# aplica as migracoes e comeca a coletar. Site em http://localhost:8080.
+up:
+	$(COMPOSE) up -d --build
+
+down:
+	$(COMPOSE) down
+
+logs:
+	$(COMPOSE) logs -f app
+
+# So o banco, para rodar o servidor na maquina com make run.
 db:
 	$(COMPOSE) up -d db
 

@@ -15,7 +15,7 @@ site com o mapa interativo e a API que o alimenta.
 | Senhas | bcrypt ([golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto/bcrypt)) |
 | Migrações | [goose](https://github.com/pressly/goose) |
 | Interface | HTML renderizado no servidor, HTMX 2.0 e Leaflet 1.9.4 |
-| Contêiner do banco | Podman ou Docker Compose |
+| Contêineres | Podman ou Docker Compose: banco e servidor |
 
 ## Arquitetura
 
@@ -73,12 +73,19 @@ sessões e as decisões de projeto, está em
 ├── web/
 │   ├── templates/                layouts/, partials/ e pages/
 │   └── static/                   css/, js/, img/, vendor/ e data/
-├── docker-compose.yml            Serviço do banco (PostGIS)
+├── deploy/entrypoint.sh          Partida do contêiner: espera o banco, migra, sobe o servidor
+├── Containerfile                 Imagem do servidor (Podman ou Docker)
+├── docker-compose.yml            Banco (PostGIS) e servidor
 ├── .env.example                  Modelo de configuração
 └── Makefile                      Atalhos de desenvolvimento
 ```
 
 ## Requisitos
+
+Para só **rodar** o sistema basta Podman ou Docker com Compose: o servidor,
+o goose e o banco vêm em contêineres (veja "Jeito rápido" abaixo).
+
+Para **desenvolver** com o servidor rodando direto na máquina:
 
 | Programa | Versão | Necessário para |
 |---|---|---|
@@ -92,6 +99,47 @@ go install github.com/pressly/goose/v3/cmd/goose@latest
 ```
 
 ## Como executar
+
+### Jeito rápido: tudo em contêiner
+
+```sh
+git clone https://github.com/PMPRR/SCOM---Trabalho-2.git
+cd SCOM---Trabalho-2
+cp .env.example .env               # troque change-me por uma senha sua
+podman compose up -d --build       # ou: docker compose up -d --build, ou: make up
+```
+
+Abra <http://localhost:8080/>. Na partida, o contêiner do servidor espera o
+banco ficar pronto, aplica as migrações pendentes e começa a coletar as
+fontes externas a cada `INGEST_INTERVAL` (1 h no `.env.example`); a primeira
+coleta é imediata. Nada precisa estar instalado além do Podman ou Docker.
+
+| Comando | O que faz |
+|---|---|
+| `podman compose logs -f app` | Acompanha o log do servidor (`make logs`) |
+| `podman compose down` | Para tudo; os dados ficam no volume `pgdata` (`make down`) |
+| `podman compose down -v` | Para tudo e apaga o banco |
+| `podman compose up -d --build` | Recompila e sobe de novo depois de mudar o código |
+| `podman compose run --rm app ingest` | Coleta as fontes uma vez, fora do horário |
+| `make promote-admin EMAIL=...` | Promove uma conta a administrador (funciona igual) |
+| `make seed-dev` | Grava as 28 estações simuladas (funciona igual) |
+
+Com Docker, troque `podman compose` por `docker compose`, ou use
+`make up COMPOSE="docker compose"`.
+
+Observações:
+
+- Na URL do banco a senha entra sem codificação; use em `POSTGRES_PASSWORD`
+  só letras, números, `-` e `_`.
+- Com `APP_ENV=prod` os cookies passam a exigir HTTPS. Os navegadores aceitam
+  isso em `http://localhost`, mas não por outro endereço sem HTTPS; nesse caso
+  use um proxy reverso com TLS na frente.
+- O banco fica acessível só desta máquina, na porta `DB_PORT` (5432).
+- A imagem `postgis/postgis` é publicada para x86-64; em computadores ARM
+  (Mac M1 em diante) o Docker Desktop e o Podman a executam por emulação,
+  mais devagar.
+
+Os passos abaixo rodam o servidor direto na máquina, para desenvolver.
 
 ### 1. Clonar e configurar
 
@@ -110,7 +158,9 @@ em `DATABASE_URL`. O arquivo `.env` não é versionado.
 | `APP_ADDR` | Endereço em que o servidor escuta | `:8080` |
 | `DATABASE_URL` | URL de conexão com o PostgreSQL | obrigatória |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Credenciais do contêiner do banco | — |
-| `INGEST_INTERVAL` | Intervalo da coleta automática (`1h`, `30m`; mínimo `10m`) | desligada |
+| `INGEST_INTERVAL` | Intervalo da coleta automática (`1h`, `30m`; mínimo `10m`; `0` desliga) | desligada (`1h` no `.env.example` e no contêiner) |
+| `APP_PORT` | Porta do site no computador, quando roda em contêiner | `8080` |
+| `DB_PORT` | Porta do banco no computador | `5432` |
 | `CEMADEN_EMAIL`, `CEMADEN_PASSWORD` | Conta da PED do CEMADEN; o token é renovado sozinho | fonte desligada |
 | `CEMADEN_TOKEN` | Alternativa: token gerado à mão, válido por cerca de 4 h | fonte desligada |
 
@@ -353,7 +403,10 @@ público). Eles aparecem na página do mapa.
 
 | Comando | O que faz |
 |---|---|
-| `make db` | Sobe o contêiner do banco |
+| `make up` | Sobe banco e servidor em contêineres (compila a imagem) |
+| `make down` | Para os contêineres; os dados ficam no volume |
+| `make logs` | Acompanha o log do servidor em contêiner |
+| `make db` | Sobe só o contêiner do banco |
 | `make run` | Executa o servidor |
 | `make test` | Executa os testes automatizados |
 | `make ingest` | Coleta as fontes externas uma vez |
