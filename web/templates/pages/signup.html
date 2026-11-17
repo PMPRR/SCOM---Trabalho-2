@@ -1,0 +1,122 @@
+{{define "title"}}Criar conta - ClimaSP{{end}}
+
+{{define "description"}}Crie sua conta no ClimaSP e acompanhe as estações meteorológicas da sua região no Estado de São Paulo.{{end}}
+
+{{define "head_page"}}
+<link rel="stylesheet" href="/static/css/auth.css">
+<script src="/static/js/auth.js" defer></script>
+{{end}}
+
+{{define "content"}}
+<main id="content">
+    <div class="auth">
+        <section class="auth-card" aria-labelledby="signup-heading">
+            <h1 id="signup-heading">Criar conta</h1>
+            <p class="auth-lede">
+                Pedimos só o necessário para abrir o mapa já na sua região.
+            </p>
+
+            <form class="auth-form" action="#" method="post">
+                <div class="field">
+                    <label class="field-label" for="nome">Nome</label>
+                    <input class="field-input"
+                        type="text"
+                        id="nome"
+                        name="nome"
+                        autocomplete="name"
+                        required>
+                </div>
+
+                <div class="field">
+                    <label class="field-label" for="email">E-mail</label>
+                    <input class="field-input"
+                        type="email"
+                        id="email"
+                        name="email"
+                        autocomplete="email"
+                        inputmode="email"
+                        aria-describedby="email-ajuda"
+                        required>
+                    <p class="field-hint" id="email-ajuda">Serve para entrar e para recuperar a senha.</p>
+                </div>
+
+                <div class="field">
+                    <label class="field-label" for="senha">Senha</label>
+                    <div class="field-group">
+                        <input class="field-input"
+                            type="password"
+                            id="senha"
+                            name="senha"
+                            autocomplete="new-password"
+                            minlength="8"
+                            aria-describedby="senha-ajuda"
+                            required>
+                        <button class="field-toggle" type="button" data-toggle-senha="senha" hidden>Mostrar</button>
+                    </div>
+                    <p class="field-hint" id="senha-ajuda">No mínimo 8 caracteres.</p>
+                </div>
+
+                <div class="field">
+                    <label class="field-label" for="senha-confirma">Confirmar senha</label>
+                    <input class="field-input"
+                        type="password"
+                        id="senha-confirma"
+                        name="senha-confirma"
+                        autocomplete="new-password"
+                        minlength="8"
+                        data-confirma-senha="senha"
+                        required>
+                </div>
+
+                <div class="field">
+                    <label class="field-label" for="regiao">Região de interesse <span class="field-opcional">(opcional)</span></label>
+                    <select class="field-input" id="regiao" name="regiao" aria-describedby="regiao-ajuda">
+                        <option value="">Escolher depois</option>
+                        <option value="rmsp">Região Metropolitana de São Paulo</option>
+                        <option value="campinas">Campinas</option>
+                        <option value="sorocaba">Sorocaba</option>
+                        <option value="vale-paraiba">Vale do Paraíba e Litoral Norte</option>
+                        <option value="baixada-santista">Baixada Santista</option>
+                        <option value="registro">Registro e Vale do Ribeira</option>
+                        <option value="itapeva">Itapeva</option>
+                        <option value="central">Central (Araraquara e São Carlos)</option>
+                        <option value="ribeirao-preto">Ribeirão Preto</option>
+                        <option value="franca">Franca</option>
+                        <option value="barretos">Barretos</option>
+                        <option value="sao-jose-do-rio-preto">São José do Rio Preto</option>
+                        <option value="aracatuba">Araçatuba</option>
+                        <option value="bauru">Bauru</option>
+                        <option value="marilia">Marília</option>
+                        <option value="presidente-prudente">Presidente Prudente</option>
+                    </select>
+                    <p class="field-hint" id="regiao-ajuda">O mapa abre centralizado nela.</p>
+                </div>
+
+                <div class="field-check">
+                    <input type="checkbox" id="termos" name="termos" required>
+                    <label for="termos">Li e aceito os termos de uso. [FAKE]</label>
+
+                </div>
+
+                <button class="btn btn-primary" type="submit">Criar conta</button>
+                <p class="auth-aviso" id="auth-aviso" role="status" hidden></p>
+
+            </form>
+
+            <p class="auth-switch">
+                Já tem conta? <a href="/entrar">Entrar</a>
+            </p>
+        </section>
+
+        <aside class="auth-aside" aria-labelledby="dados-heading">
+            <h2 id="dados-heading">Sobre seus dados</h2>
+            <ul class="auth-list" role="list">
+                <li>A conta guarda apenas nome, e-mail e suas preferências de mapa.</li>
+                <li>Nada é repassado a terceiros: as medições vêm de fontes públicas oficiais.</li>
+                <li>A conta pode ser apagada a qualquer momento.</li>
+            </ul>
+            <p>Prefere olhar antes de decidir? <a href="/mapa">Ver o mapa</a></p>
+        </aside>
+    </div>
+</main>
+{{end}}
