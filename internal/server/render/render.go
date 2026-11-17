@@ -144,9 +144,10 @@ func (rd *Renderer) execute(w http.ResponseWriter, r *http.Request, status int, 
 }
 
 // errorFragment is how an error reaches a page through HTMX: a paragraph
-// that takes the place of the content that could not be loaded.
+// that takes the place of the content that could not be loaded. data-field
+// names the input the error is about, so the page can mark it.
 var errorFragment = template.Must(template.New("error").Parse(
-	`<p class="request-error" role="alert">{{.Message}}{{if .Detail}} <code>{{.Detail}}</code>{{end}}</p>`,
+	`<p class="request-error" role="alert"{{if .Field}} data-field="{{.Field}}"{{end}}>{{.Message}}{{if .Detail}} <code>{{.Detail}}</code>{{end}}</p>`,
 ))
 
 // errorBody is the single error format of the API:
@@ -202,6 +203,11 @@ func (rd *Renderer) Describe(err error) (status int, code, message, field string
 		return http.StatusForbidden, "forbidden", "Você não tem permissão para acessar isto.", ""
 	case errors.Is(err, domain.ErrEmailTaken):
 		return http.StatusConflict, "email_taken", "Já existe uma conta com este e-mail.", ""
+	case errors.Is(err, domain.ErrOfficialStation):
+		return http.StatusConflict, "official_station",
+			"Esta estação é coletada de um instituto: os dados vêm da fonte. Ela só pode ser ativada ou desativada.", ""
+	case errors.Is(err, domain.ErrStationCodeTaken):
+		return http.StatusConflict, "station_code_taken", "Já existe uma estação particular com este código.", "external_code"
 	case errors.Is(err, domain.ErrTooManyRequests):
 		return http.StatusTooManyRequests, "too_many_requests", "Muitas tentativas. Aguarde um minuto e tente de novo.", ""
 	default:
