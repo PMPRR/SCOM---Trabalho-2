@@ -12,6 +12,7 @@ os middlewares do servidor, e só formatados para leitura.
 - [Páginas HTML](#páginas-html)
 - [Fragmentos HTMX](#fragmentos-htmx)
 - [Painel de estações](#painel-de-estações)
+- [Envio pelas estações](#post-apistationsidreadings)
 - [Outros](#outros)
 
 ## Convenções
@@ -66,6 +67,10 @@ A verificação do CSRF vem antes da de login: um pedido sem cookie nenhum
 recebe 403 `csrf_failed`; com o cookie CSRF mas sem sessão, 401
 `unauthenticated`.
 
+A única exceção é [`POST /api/stations/{id}/readings`](#post-apistationsidreadings),
+usada pelas próprias estações: ela não usa cookie nem CSRF, e cada pedido é
+autenticado pela assinatura Ed25519 do corpo.
+
 ### Formato de erro
 
 Todo erro tem o mesmo formato:
@@ -93,14 +98,19 @@ Todo erro tem o mesmo formato:
 | `invalid_parameter` | 400 | Parâmetro ou campo inválido (veja `field`); `field: "body"` para JSON malformado ou com campo desconhecido |
 | `unauthenticated` | 401 | Rota exige login |
 | `invalid_credentials` | 401 | E-mail ou senha incorretos |
+| `invalid_signature` | 401 | Leitura enviada por estação sem assinatura, ou com assinatura que não confere |
 | `forbidden` | 403 | Usuário logado sem permissão |
 | `csrf_failed` | 403 | Token CSRF ausente ou diferente do cookie |
+| `uplink_disabled` | 403 | Leitura enviada a uma estação sem chave cadastrada |
 | `not_found` | 404 | Recurso não existe (ou estação desativada, na leitura pública) |
 | `email_taken` | 409 | E-mail já cadastrado |
 | `station_code_taken` | 409 | Código de estação particular repetido |
 | `official_station` | 409 | Tentativa de editar ou excluir uma estação oficial |
+| `key_taken` | 409 | Chave pública já usada por outra estação |
+| `payload_too_large` | 413 | Leitura enviada com mais de 16 KiB |
 | `unsupported_media_type` | 415 | Corpo que não é JSON numa rota da API |
-| `too_many_requests` | 429 | Mais de 10 tentativas por minuto em login ou cadastro (com `Retry-After`) |
+| `too_many_requests` | 429 | Mais de 10 tentativas por minuto em login ou cadastro, ou de 120 envios de leitura por minuto do mesmo IP (com `Retry-After`) |
+| `too_soon` | 429 | Leitura enviada antes do fim do intervalo da estação (com `Retry-After`) |
 | `internal_error` | 500 | Erro inesperado; a causa vai para o log |
 
 O mesmo erro muda de **formato**, nunca de status, conforme quem pede:
@@ -147,6 +157,11 @@ A próxima página começa em `offset + limit`; acabou quando
 | `created_at`, `updated_at` | data | Cadastro e última alteração |
 | `latest` | objeto ou `null` | Leitura mais recente (abaixo); `null` sem leitura |
 | `confidence` | texto | `high`, `medium`, `low`, ou `""` sem leitura |
+| `public_key` | texto | Só em estações com envio automático: chave pública Ed25519, `ssh-ed25519 AAAA...` |
+| `key_fingerprint` | texto | Só com chave: impressão digital SHA-256, como `ssh-keygen -l` mostra |
+| `report_interval_s` | inteiro ou `null` | Intervalo de envio combinado, em segundos |
+| `last_report_at` | data ou `null` | Último envio aceito da própria estação |
+| `uplink_status` | texto | Só com chave: `waiting` (nenhum envio ainda), `ok`, `late` (dois intervalos sem envio) |
 
 Objeto `latest` (um sensor que a estação não tem vem `null`):
 
@@ -211,7 +226,9 @@ curl "http://localhost:8080/api/stations?limit=2"
         "wind_dir_deg": 140,
         "pressure_hpa": 1016.2
       },
-      "confidence": "low"
+      "confidence": "low",
+      "report_interval_s": null,
+      "last_report_at": null
     },
     {
       "id": 2,
@@ -235,7 +252,9 @@ curl "http://localhost:8080/api/stations?limit=2"
         "wind_dir_deg": null,
         "pressure_hpa": null
       },
-      "confidence": "high"
+      "confidence": "high",
+      "report_interval_s": null,
+      "last_report_at": null
     }
   ],
   "pagination": {"limit": 2, "offset": 0, "total": 2}
@@ -300,7 +319,9 @@ curl http://localhost:8080/api/stations/2
       "wind_dir_deg": null,
       "pressure_hpa": null
     },
-    "confidence": "high"
+    "confidence": "high",
+    "report_interval_s": null,
+    "last_report_at": null
   }
 }
 ```
@@ -337,6 +358,8 @@ Cadastra uma estação particular. Quem cadastra fica dono dela.
 | `lon` | número | sim | −53,5 a −44 |
 | `altitude_m` | número | não | −100 a 3000 |
 | `active` | booleano | não | padrão `true` |
+| `public_key` | texto | não | Linha do `.pub` de uma chave `ssh-keygen -t ed25519`; a estação passa a [enviar as próprias leituras](#post-apistationsidreadings). O comentário é descartado. Única entre as estações |
+| `report_interval_s` | inteiro | com `public_key` | 60 a 86400 segundos; sem `public_key`, ignorado |
 
 **Exemplo de requisição**
 
@@ -364,7 +387,9 @@ curl -i -b jar.txt -H "X-CSRF-Token: $TOKEN" -H "Content-Type: application/json"
     "created_at": "2026-11-17T07:49:14.481207-03:00",
     "updated_at": "2026-11-17T07:49:14.481207-03:00",
     "latest": null,
-    "confidence": ""
+    "confidence": "",
+    "report_interval_s": null,
+    "last_report_at": null
   }
 }
 ```
@@ -389,6 +414,8 @@ Mensagens de validação dos demais campos:
 | `lat` | "Informe a latitude." / "A latitude deve estar entre -25,5 e -19,5, a faixa do Estado de São Paulo." |
 | `lon` | "Informe a longitude." / "A longitude deve estar entre -53,5 e -44, a faixa do Estado de São Paulo." |
 | `altitude_m` | "A altitude deve estar entre -100 e 3000 metros." |
+| `public_key` | "A chave deve ser a linha do arquivo .pub de uma chave criada com ssh-keygen -t ed25519 (começa com ssh-ed25519)." |
+| `report_interval_s` | "O intervalo de envio deve ficar entre 1 minuto e 24 horas." |
 
 | Status | Quando |
 |---|---|
@@ -396,7 +423,7 @@ Mensagens de validação dos demais campos:
 | 400 | Campo inválido (veja `field`) ou JSON malformado (`field: "body"`) |
 | 401 | Sem sessão |
 | 403 | Sem token CSRF ou token diferente |
-| 409 | `external_code` já usado por outra estação particular |
+| 409 | `external_code` já usado por outra estação particular (`station_code_taken`), ou chave já usada (`key_taken`) |
 | 415 | Corpo que não é JSON |
 | 500 | Erro interno |
 
@@ -411,7 +438,9 @@ seriam regravados na próxima coleta.
 
 **Parâmetros de caminho:** `id` (inteiro ≥ 1).
 **Corpo:** o mesmo de `POST /api/stations`; campo omitido volta ao padrão
-(`altitude_m` → `null`, `active` → `true`).
+(`altitude_m` → `null`, `active` → `true`, `public_key` → sem envio
+automático). Uma chave nova invalida a anterior na hora e recomeça a contagem
+do intervalo.
 
 **Exemplo de requisição**
 
@@ -439,7 +468,9 @@ curl -X PUT -b jar.txt -H "X-CSRF-Token: $TOKEN" -H "Content-Type: application/j
     "created_at": "2026-11-17T07:49:14.481207-03:00",
     "updated_at": "2026-11-17T07:52:03.902114-03:00",
     "latest": null,
-    "confidence": ""
+    "confidence": "",
+    "report_interval_s": null,
+    "last_report_at": null
   }
 }
 ```
@@ -458,7 +489,7 @@ curl -X PUT -b jar.txt -H "X-CSRF-Token: $TOKEN" -H "Content-Type: application/j
 | 401 | Sem sessão |
 | 403 | Estação de outro operador, ou oficial pedida por operador; ou sem token CSRF |
 | 404 | Não existe |
-| 409 | Estação oficial (pedida por administrador), ou `external_code` repetido |
+| 409 | Estação oficial (pedida por administrador), `external_code` repetido ou chave já usada |
 | 415 | Corpo que não é JSON |
 | 500 | Erro interno |
 
@@ -529,6 +560,96 @@ curl -i -X DELETE -b jar.txt -H "X-CSRF-Token: $TOKEN" http://localhost:8080/api
 | 403 | Estação de outro operador, ou oficial pedida por operador; sem token CSRF |
 | 404 | Não existe |
 | 409 | Estação oficial (pedida por administrador) |
+| 500 | Erro interno |
+
+### `POST /api/stations/{id}/readings`
+
+Recebe uma leitura enviada **pela própria estação**. Só para estações
+particulares com chave pública cadastrada. Não usa sessão, cookie nem token
+CSRF: o pedido é autenticado pela assinatura Ed25519 dos bytes exatos do
+corpo, feita com a chave privada da estação. O guia completo, com o preparo
+da chave e clientes prontos, está em
+[estacao-particular.md](estacao-particular.md).
+
+**Cabeçalhos**
+
+| Nome | Obrigatório | Conteúdo |
+|---|---|---|
+| `Content-Type` | sim | `application/json` |
+| `X-Signature` | sim | Assinatura Ed25519 (64 bytes) dos bytes do corpo, em base64 padrão |
+
+**Corpo** (até 16 KiB; pelo menos um valor medido; campo desconhecido é recusado)
+
+| Campo | Tipo | Regra |
+|---|---|---|
+| `observed_at` | data RFC 3339 | Opcional; entre 24 h atrás e 5 min à frente do relógio do servidor. Sem ele, a leitura é datada na chegada (segundo cheio) |
+| `temperature_c` | número | −90 a 60 |
+| `humidity_pct` | número | 0 a 100 |
+| `precipitation_mm` | número | 0 a 500 (mm na última hora) |
+| `wind_speed_ms` | número | 0 a 120 |
+| `wind_dir_deg` | inteiro | 0 a 360 |
+| `pressure_hpa` | número | 800 a 1100 |
+
+**Intervalo.** Uma leitura nova antes de passar o intervalo da estação, menos
+um décimo de folga, é recusada com 429 `too_soon` e `Retry-After`. A mesma
+leitura de novo (mesmo `observed_at`) é aceita com 200 e não é gravada outra
+vez: reenviar depois de uma falha de rede é seguro.
+
+**Exemplo de requisição** (assinatura feita pelo cliente
+`tools/estacao/enviar-leitura.py` ou pelo firmware)
+
+```sh
+curl -i -H "Content-Type: application/json" \
+  -H "X-Signature: F86pzshj2tfzjfsBTNKNzAFNTajbZDQchlhO3b1qOUHMUytXlUOhpNxQcVOP3prYSKAtwvl3G93nSBUdudj2DQ==" \
+  --data-binary '{"temperature_c":23.4,"humidity_pct":71,"precipitation_mm":0.2}' \
+  http://localhost:8080/api/stations/1/readings
+```
+
+**Exemplo de resposta** — `201 Created`
+
+```json
+{
+  "data": {
+    "stored": true,
+    "observed_at": "2026-11-17T11:16:54Z",
+    "next_after": "2026-11-17T11:17:48Z"
+  }
+}
+```
+
+`next_after` é o primeiro instante em que o próximo envio é aceito. Com 200,
+`stored` é `false`.
+
+**Erros**
+
+```json
+{"error": {"code": "invalid_signature", "message": "Assinatura ausente ou inválida para a chave desta estação."}}
+{"error": {"code": "too_soon", "message": "Envio antes do fim do intervalo combinado para esta estação."}}
+{"error": {"code": "invalid_parameter", "field": "temperature_c", "message": "A temperatura deve estar entre -90 e 60 °C."}}
+{"error": {"code": "uplink_disabled", "message": "Esta estação não está configurada para enviar leituras."}}
+```
+
+Outras mensagens de validação: `humidity_pct` "A umidade deve estar entre 0 e
+100 %.", `precipitation_mm` "A chuva deve estar entre 0 e 500 mm.",
+`wind_speed_ms` "A velocidade do vento deve estar entre 0 e 120 m/s.",
+`pressure_hpa` "A pressão deve estar entre 800 e 1100 hPa.", `wind_dir_deg`
+"A direção do vento deve ser um número inteiro de 0 a 360 graus.",
+`observed_at` "A data da leitura deve estar entre 24 horas atrás e 5 minutos
+à frente do relógio do servidor.", `body` "A leitura precisa de pelo menos um
+valor medido." ou "O corpo não é um JSON de leitura válido. Confira os nomes e
+os tipos dos campos."
+
+| Status | Quando |
+|---|---|
+| 201 | Leitura gravada |
+| 200 | Leitura com o mesmo `observed_at` já gravada (reenvio) |
+| 400 | `id` inválido, valor fora da faixa ou JSON inválido (veja `field`) |
+| 401 | Sem `X-Signature`, ou assinatura que não confere com a chave da estação |
+| 403 | Estação sem chave cadastrada, ou oficial |
+| 404 | Estação não existe |
+| 413 | Corpo com mais de 16 KiB |
+| 415 | Sem `Content-Type: application/json` |
+| 429 | Antes do fim do intervalo (`too_soon`), ou mais de 120 pedidos por minuto do mesmo IP (`too_many_requests`); com `Retry-After` |
 | 500 | Erro interno |
 
 ## Autenticação
@@ -735,7 +856,7 @@ e a do formulário comum, para quem está sem JavaScript.
 | Método | Rota | Campos ou parâmetros | Sucesso com HTMX | Sucesso sem JavaScript |
 |---|---|---|---|---|
 | GET | `/painel/estacoes/linhas` | `q` (busca, até 120 caracteres), `offset` | `200`: linhas `<tr>` da tabela; com `offset=0`, também a linha de status (fora de banda) e `HX-Replace-Url` | — |
-| POST | `/painel/estacoes` | `name`, `external_code`, `lat`, `lon`, `altitude_m`, `active`, `csrf_token` | `204`, `HX-Redirect: /painel/estacoes?aviso=criada` | `303` para a mesma URL |
+| POST | `/painel/estacoes` | `name`, `external_code`, `lat`, `lon`, `altitude_m`, `active`, `public_key`, `report_interval_s`, `csrf_token` | `204`, `HX-Redirect: /painel/estacoes?aviso=criada` | `303` para a mesma URL |
 | PUT | `/painel/estacoes/{id}` | os mesmos | `204`, `HX-Redirect: /painel/estacoes?aviso=alterada` | — |
 | POST | `/painel/estacoes/{id}` | os mesmos | — | `303` para `/painel/estacoes?aviso=alterada` |
 | POST | `/painel/estacoes/{id}/ativa` | `active=true` ou `false`, `csrf_token` | `200`: a linha `<tr>` nova | `303` para `/painel/estacoes?aviso=ativada` ou `desativada` |

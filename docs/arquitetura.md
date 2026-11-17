@@ -9,7 +9,9 @@ dados meteorológicos do Estado de São Paulo. Os endpoints estão descritos em
 O ClimaSP é uma aplicação **cliente-servidor monolítica**, escrita em Go, com
 **arquitetura em camadas**. Um único processo serve as páginas HTML, os
 fragmentos que o HTMX troca na página, a API JSON e os arquivos estáticos. O
-mesmo código também coleta, em segundo plano, as medições dos institutos.
+mesmo código também coleta, em segundo plano, as medições dos institutos, e
+recebe as leituras que as estações particulares enviam sozinhas, assinadas
+com uma chave Ed25519 ([estacao-particular.md](estacao-particular.md)).
 
 ```mermaid
 flowchart LR
@@ -28,6 +30,7 @@ flowchart LR
     DB[(PostgreSQL 17<br/>+ PostGIS)]
     OM[Open-Meteo]
     CE[CEMADEN]
+    EP[Estação particular<br/>microcontrolador ou<br/>placa única]
 
     P -- GET --> M
     H -- GET/POST/PUT/DELETE<br/>fragmentos HTML --> M
@@ -36,6 +39,7 @@ flowchart LR
     S --> I
     I -- HTTPS --> OM
     I -- HTTPS --> CE
+    EP -- POST leitura<br/>assinada Ed25519 --> M
 ```
 
 | Peça | Tecnologia | Papel |
@@ -83,7 +87,7 @@ flowchart TB
 | Acesso a dados | `internal/repository` | Consultas e gravações no PostgreSQL | Decidir o que é permitido |
 | Fontes externas | `internal/ingest` | Fala com Open-Meteo e CEMADEN e converte para `domain.Reading` | Gravar no banco |
 | Domínio | `internal/domain` | `Station`, `Observation`, `Reading`, `User`, erros do sistema | Depender de qualquer outra camada |
-| Segurança | `internal/security` | bcrypt, tokens aleatórios, limite de tentativas | Conhecer HTTP ou o banco |
+| Segurança | `internal/security` | bcrypt, tokens aleatórios, limite de tentativas, chaves Ed25519 no formato do OpenSSH | Conhecer HTTP ou o banco |
 | Configuração | `internal/config` | Lê o ambiente (`.env`) | — |
 
 ### Inversão de dependência
@@ -137,7 +141,9 @@ stations := handler.NewStationHandler(
 │       └── render/               Templates, JSON e tradução de erros
 ├── migrations/                   Migrações goose (SQL)
 ├── db/                           schema.sql (gerado) e seed_dev.sql
-├── tools/                        Geradores de dados estáticos (relevo)
+├── tools/
+│   ├── build-relevo.py           Gera o relevo a partir do SRTM30
+│   └── estacao/                  Lado da estação: cliente Python, chave para microcontrolador, exemplo em C
 └── web/
     ├── templates/                layouts/, partials/, pages/
     └── static/                   css/, js/, vendor/, data/, img/
@@ -146,13 +152,17 @@ stations := handler.NewStationHandler(
 ## Caminho de uma requisição
 
 Todas as requisições passam pela mesma cadeia de middlewares, montada em
-`router.go`, de fora para dentro:
+`router.go`, de fora para dentro. A única rota que sai da cadeia do site é a
+das leituras enviadas pelas estações, logo depois do log:
 
 ```mermaid
 flowchart LR
     A[Requisição] --> B[Recover]
     B --> C[Logging]
-    C --> D[CSRF]
+    C --> X{POST /api/stations/id/readings?}
+    X -- sim --> Y[RateLimit<br/><small>120/min por IP</small>]
+    Y --> Z[SubmitReading<br/><small>confere a assinatura</small>]
+    X -- não --> D[CSRF]
     D --> E[LoadUser]
     E --> F{ServeMux}
     F --> G[RateLimit<br/><small>só /entrar e /cadastro</small>]
@@ -171,6 +181,12 @@ flowchart LR
 | `RateLimit` | `middleware/ratelimit.go` | 10 tentativas por minuto por IP em login e cadastro; acima disso, 429 |
 | `RequireAuth` | `middleware/auth.go` | Exige login: navegador vai para `/entrar`, HTMX recebe `HX-Redirect`, API recebe 401 |
 | `RequireRole` | `middleware/auth.go` | Exige um perfil (administrador); 403 para os outros |
+
+Por que a rota das estações fica fora do CSRF e da sessão: o CSRF protege
+credenciais que o navegador manda sozinho (cookies). Uma estação não tem
+cookie, e a assinatura do corpo não é algo que outro site consiga fazer o
+navegador anexar. Cada pedido é autenticado pela chave da estação, no
+serviço (`internal/service/station_uplink.go`).
 
 Exemplo completo, um operador alterando a própria estação pela API:
 
@@ -243,6 +259,10 @@ erDiagram
         real altitude_m
         boolean active
         bigint owner_id FK "NULL = estação oficial"
+        text public_key "ssh-ed25519, envio automático"
+        text key_fingerprint UK "SHA256, uma chave por estação"
+        integer report_interval_s "60 a 86400"
+        timestamptz last_report_at "último envio aceito"
         timestamptz created_at
         timestamptz updated_at
     }
@@ -284,6 +304,10 @@ Decisões do modelo:
 - **Exclusões.** Apagar uma estação apaga as observações (`CASCADE`); um
   instituto com estações não pode ser apagado (`RESTRICT`); apagar um usuário
   mantém as estações dele, que ficam sem dono (`SET NULL`).
+- **Chave da estação.** `public_key`, `key_fingerprint` e
+  `report_interval_s` existem juntos ou nenhum (`CHECK`); a impressão digital
+  é única, então uma chave identifica uma única estação. Só a chave pública
+  é guardada.
 - **Validação em dois níveis.** Os `CHECK` do banco repetem os limites do
   serviço: se uma regra falhar no código, o banco ainda recusa o dado.
 
@@ -345,6 +369,7 @@ func canManage(actor domain.User, st domain.Station) bool {
 | Editar ou excluir estação particular | não | só as suas | todas |
 | Ativar ou desativar | não | só as suas | todas, inclusive as oficiais |
 | Editar ou excluir estação oficial | não | não | não (409: os dados vêm da fonte) |
+| Cadastrar a chave de envio automático | não | nas suas | nas particulares |
 | Lista de usuários | não | não | sim |
 
 Esconder um botão na página é só conveniência: toda regra é aplicada no
@@ -363,6 +388,9 @@ servidor, e os testes as exercitam por HTTP.
 | Corpo gigante | 1 MiB no máximo em qualquer requisição que altera dados | `middleware/csrf.go` |
 | Dados externos inválidos | Leitura fora do Estado, com data impossível ou valor fisicamente impossível é descartada | `service/ingest.go` |
 | Segredos no código | Credenciais só no `.env`, que não é versionado | `internal/config` |
+| Leitura forjada em nome de uma estação | Assinatura Ed25519 dos bytes do corpo, conferida com a chave pública cadastrada; o servidor não guarda segredo da estação | `service/station_uplink.go`, `security/sshkey.go` |
+| Repetição de um envio capturado | A leitura fica gravada pelo horário (chave primária); repetida, não muda nada. `observed_at` só vale de 24 h atrás a 5 min à frente | `repository/station.go` |
+| Estação enviando demais | Intervalo conferido e registrado no mesmo `UPDATE`, que trava a linha: dois envios simultâneos não passam juntos. Mais 120 pedidos por minuto por IP | `repository/station.go`, `router.go` |
 
 ## Coleta das fontes externas
 
@@ -386,6 +414,40 @@ flowchart LR
   numa transação: a fonte é gravada inteira ou nada.
 - O CEMADEN exige credencial; o token (válido por cerca de 4 h) é renovado
   sozinho a partir do e-mail e da senha do `.env`.
+
+## Envio pelas estações particulares
+
+O outro caminho de entrada de dados é o inverso da coleta: a estação manda.
+
+```mermaid
+sequenceDiagram
+    participant E as Estação
+    participant H as SubmitReading
+    participant S as StationService.Submit
+    participant R as StationRepository
+    participant DB as PostgreSQL
+
+    E->>H: POST /api/stations/42/readings + X-Signature
+    H->>H: Content-Type JSON, corpo até 16 KiB
+    H->>S: Submit(42, bytes do corpo, assinatura)
+    S->>R: Get(42) (chave pública, intervalo)
+    S->>S: confere a assinatura Ed25519 dos bytes
+    S->>S: lê e valida a leitura (faixas, horário)
+    S->>R: SaveSubmission(leitura, agora, agora − 0,9 × intervalo)
+    R->>DB: já existe leitura com esse horário? (reenvio → 200)
+    R->>DB: UPDATE last_report_at WHERE último envio ≤ limite
+    R->>DB: INSERT observations
+    S-->>H: gravada, próximo envio a partir de ...
+    H-->>E: 201 {"data": {"stored": true, ...}}
+```
+
+- A assinatura é conferida antes de o corpo ser lido: um pedido sem
+  assinatura válida não chega a ser interpretado.
+- Ao contrário da coleta, que descarta o valor impossível e fica com o resto,
+  aqui um valor fora da faixa recusa a leitura inteira (400 com o campo): o
+  dono precisa saber que o sensor ou o firmware está errado.
+- O estado do envio (`waiting`, `ok`, `late`) é calculado na leitura, como a
+  confiança: atrasada depois de dois intervalos sem envio.
 
 ## Interface
 
@@ -441,6 +503,8 @@ time=2026-11-17T07:49:14.311-03:00 level=INFO msg=request method=POST path=/api/
 | Falha de autenticação | `authentication failed` (com o motivo) | WARN |
 | Conta criada | `user created` | INFO |
 | Estação criada, alterada, ativada ou desativada, excluída | `station created`, `station updated`, `station active changed`, `station deleted` | INFO |
+| Leitura recebida de uma estação | `reading received` | INFO |
+| Envio recusado (assinatura, intervalo) | `submission refused` (com o motivo) | WARN |
 | Coleta | `ingest finished` ou `ingest failed` | INFO / ERROR |
 | Erro interno | `internal error` (com a causa) | ERROR |
 | Toda requisição | `request` (método, caminho, status, duração) | INFO |
@@ -454,7 +518,7 @@ alcança o banco.
 |---|---|---|
 | Serviço | `internal/service/*_test.go` | Regras de estação, permissões, validação, confiança, coleta, autenticação |
 | Repositório | `internal/repository/station_test.go` | Montagem do `WHERE` sem valores no SQL, escape do `LIKE` |
-| Segurança | `internal/security/security_test.go` | bcrypt, tokens, limite de tentativas |
+| Segurança | `internal/security/*_test.go` | bcrypt, tokens, limite de tentativas; chaves e impressões digitais conferidas contra o `ssh-keygen` |
 | HTTP | `internal/server/handler/*_test.go` | Rotas reais com middlewares e templates, por um servidor de teste com cookies: CSRF, login, perfis, XSS, CRUD |
 | Fontes | `internal/ingest/*_test.go` | Conversão das respostas dos institutos |
 
