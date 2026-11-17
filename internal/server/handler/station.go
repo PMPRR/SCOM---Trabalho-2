@@ -4,18 +4,31 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/PMPRR/SCOM---Trabalho-2/internal/domain"
+	"github.com/PMPRR/SCOM---Trabalho-2/internal/server/middleware"
 	"github.com/PMPRR/SCOM---Trabalho-2/internal/server/render"
 	"github.com/PMPRR/SCOM---Trabalho-2/internal/service"
 )
 
-// StationService is what the handlers need from the business layer.
+// StationService is what the handlers need from the business layer. The
+// first two are open to everyone; the others act on behalf of a user, and
+// the service decides what that user may do.
 type StationService interface {
 	List(ctx context.Context, limit, offset int) ([]domain.Station, service.Page, error)
 	Get(ctx context.Context, id int64) (domain.Station, error)
+
+	ListManaged(ctx context.Context, actor domain.User, search string, limit, offset int) ([]domain.Station, service.Page, error)
+	GetManaged(ctx context.Context, actor domain.User, id int64) (domain.Station, error)
+	Create(ctx context.Context, actor domain.User, in domain.StationInput) (domain.Station, error)
+	Update(ctx context.Context, actor domain.User, id int64, in domain.StationInput) (domain.Station, error)
+	SetActive(ctx context.Context, actor domain.User, id int64, active bool) (domain.Station, error)
+	Delete(ctx context.Context, actor domain.User, id int64) error
 }
 
 type StationHandler struct {
@@ -62,6 +75,177 @@ func (h *StationHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.render.JSON(w, http.StatusOK, map[string]any{"data": station})
+}
+
+// stationRequest is the JSON body of POST and PUT /api/stations. Pointers
+// tell a missing field from a zero: a station at latitude 0 is outside the
+// State, but a missing latitude is a different mistake.
+type stationRequest struct {
+	ExternalCode string   `json:"external_code"`
+	Name         string   `json:"name"`
+	Lat          *float64 `json:"lat"`
+	Lon          *float64 `json:"lon"`
+	AltitudeM    *float32 `json:"altitude_m"`
+	Active       *bool    `json:"active"` // missing means true
+}
+
+func (req stationRequest) input() (domain.StationInput, error) {
+	if req.Lat == nil {
+		return domain.StationInput{}, &domain.ValidationError{Field: "lat", Message: "Informe a latitude."}
+	}
+	if req.Lon == nil {
+		return domain.StationInput{}, &domain.ValidationError{Field: "lon", Message: "Informe a longitude."}
+	}
+	in := domain.StationInput{
+		ExternalCode: req.ExternalCode,
+		Name:         req.Name,
+		Lat:          *req.Lat,
+		Lon:          *req.Lon,
+		AltitudeM:    req.AltitudeM,
+		Active:       true,
+	}
+	if req.Active != nil {
+		in.Active = *req.Active
+	}
+	return in, nil
+}
+
+// decodeJSON reads a JSON body into dst. It refuses another content type,
+// fields dst does not have and anything after the object, so a typo in a
+// field name is an error instead of a value silently ignored. The size of
+// the body is already capped by the CSRF middleware.
+func (h *StationHandler) decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
+	if mediaType, _, _ := strings.Cut(r.Header.Get("Content-Type"), ";"); strings.TrimSpace(mediaType) != "application/json" {
+		h.render.Reject(w, r, http.StatusUnsupportedMediaType, "unsupported_media_type",
+			"Envie o corpo em JSON, com o cabeçalho Content-Type: application/json.")
+		return false
+	}
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil || decoder.More() {
+		h.render.BadRequest(w, r, "body",
+			"O corpo da requisição não é um JSON válido para esta rota. Confira os nomes e os tipos dos campos.")
+		return false
+	}
+	return true
+}
+
+// actor returns the logged-in user. Every route that calls it is behind
+// RequireAuth, so a missing user is answered as unauthenticated.
+func (h *StationHandler) actor(w http.ResponseWriter, r *http.Request) (domain.User, bool) {
+	user, ok := middleware.UserFrom(r.Context())
+	if !ok {
+		h.render.Fail(w, r, domain.ErrUnauthenticated)
+	}
+	return user, ok
+}
+
+func (h *StationHandler) pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		h.render.BadRequest(w, r, "id", "O id da estação deve ser um número inteiro.")
+		return 0, false
+	}
+	return id, true
+}
+
+// Create handles POST /api/stations. It answers 201 with the new station
+// and its address in the Location header.
+func (h *StationHandler) Create(w http.ResponseWriter, r *http.Request) {
+	actor, ok := h.actor(w, r)
+	if !ok {
+		return
+	}
+	var req stationRequest
+	if !h.decodeJSON(w, r, &req) {
+		return
+	}
+	in, err := req.input()
+	if err != nil {
+		h.render.Fail(w, r, err)
+		return
+	}
+	station, err := h.stations.Create(r.Context(), actor, in)
+	if err != nil {
+		h.render.Fail(w, r, err)
+		return
+	}
+	w.Header().Set("Location", fmt.Sprintf("/api/stations/%d", station.ID))
+	h.render.JSON(w, http.StatusCreated, map[string]any{"data": station})
+}
+
+// Update handles PUT /api/stations/{id}: the body replaces every field a
+// user can change.
+func (h *StationHandler) Update(w http.ResponseWriter, r *http.Request) {
+	actor, ok := h.actor(w, r)
+	if !ok {
+		return
+	}
+	id, ok := h.pathID(w, r)
+	if !ok {
+		return
+	}
+	var req stationRequest
+	if !h.decodeJSON(w, r, &req) {
+		return
+	}
+	in, err := req.input()
+	if err != nil {
+		h.render.Fail(w, r, err)
+		return
+	}
+	station, err := h.stations.Update(r.Context(), actor, id, in)
+	if err != nil {
+		h.render.Fail(w, r, err)
+		return
+	}
+	h.render.JSON(w, http.StatusOK, map[string]any{"data": station})
+}
+
+// Patch handles PATCH /api/stations/{id}, whose only field is "active":
+// the one change that official stations accept too.
+func (h *StationHandler) Patch(w http.ResponseWriter, r *http.Request) {
+	actor, ok := h.actor(w, r)
+	if !ok {
+		return
+	}
+	id, ok := h.pathID(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Active *bool `json:"active"`
+	}
+	if !h.decodeJSON(w, r, &req) {
+		return
+	}
+	if req.Active == nil {
+		h.render.Fail(w, r, &domain.ValidationError{Field: "active", Message: "Informe active: true ou false."})
+		return
+	}
+	station, err := h.stations.SetActive(r.Context(), actor, id, *req.Active)
+	if err != nil {
+		h.render.Fail(w, r, err)
+		return
+	}
+	h.render.JSON(w, http.StatusOK, map[string]any{"data": station})
+}
+
+// Delete handles DELETE /api/stations/{id} and answers 204.
+func (h *StationHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	actor, ok := h.actor(w, r)
+	if !ok {
+		return
+	}
+	id, ok := h.pathID(w, r)
+	if !ok {
+		return
+	}
+	if err := h.stations.Delete(r.Context(), actor, id); err != nil {
+		h.render.Fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // cardsPerPage is how many station cards one request of the list returns.
@@ -119,4 +303,3 @@ func queryInt(r *http.Request, name string, fallback int) (int, bool) {
 	}
 	return n, true
 }
-

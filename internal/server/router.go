@@ -91,9 +91,14 @@ func NewRouter(log *slog.Logger, db *pgxpool.Pool, dev bool) (http.Handler, erro
 	mux.HandleFunc("GET /estacoes", stations.Cards)
 	mux.HandleFunc("GET /estacoes/{id}", stations.Card)
 
-	// API (JSON)
+	// API (JSON). Reading is open; writing needs a session and the CSRF
+	// token in the X-CSRF-Token header, like every change on the site.
 	mux.HandleFunc("GET /api/stations", stations.List)
 	mux.HandleFunc("GET /api/stations/{id}", stations.Get)
+	mux.Handle("POST /api/stations", loggedIn(http.HandlerFunc(stations.Create)))
+	mux.Handle("PUT /api/stations/{id}", loggedIn(http.HandlerFunc(stations.Update)))
+	mux.Handle("PATCH /api/stations/{id}", loggedIn(http.HandlerFunc(stations.Patch)))
+	mux.Handle("DELETE /api/stations/{id}", loggedIn(http.HandlerFunc(stations.Delete)))
 
 	static := http.FileServer(http.Dir(staticDir))
 	mux.Handle("GET /static/", http.StripPrefix("/static", static))
