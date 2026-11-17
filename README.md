@@ -36,6 +36,10 @@ handler ──► service ──► repository ──► domain
 | Segurança | `internal/security` | Hash de senha, tokens e limite de tentativas |
 | Domínio | `internal/domain` | Entidades, sem SQL nem HTTP |
 
+A descrição completa, com o caminho de uma requisição, o modelo de dados, as
+sessões e as decisões de projeto, está em
+[docs/arquitetura.md](docs/arquitetura.md).
+
 ## Estrutura do projeto
 
 ```
@@ -58,6 +62,9 @@ handler ──► service ──► repository ──► domain
 ├── migrations/                   Migrações goose (SQL)
 ├── tools/
 │   └── build-relevo.py           Gera relevo-sp.js a partir do SRTM30
+├── docs/
+│   ├── arquitetura.md            Arquitetura, modelo de dados e segurança
+│   └── api.md                    Referência de todos os endpoints
 ├── db/
 │   ├── schema.sql                Script de criação, gerado por `make schema`
 │   └── seed_dev.sql              Estações simuladas para desenvolvimento
@@ -165,6 +172,9 @@ make promote-admin EMAIL=voce@example.com
 ```
 
 ## Rotas
+
+Resumo das rotas. Parâmetros, exemplos de requisição e resposta e todos os
+códigos de status de cada uma estão em [docs/api.md](docs/api.md).
 
 | Método | Rota | Resposta |
 |---|---|---|
@@ -348,7 +358,7 @@ público). Eles aparecem na página do mapa.
 - [x] Painel de camadas do mapa reorganizado
 - [x] Autenticação e controle de acesso (`v0.6-auth`)
 - [x] Cadastro, alteração e exclusão de estações (`v0.7-stations-crud`)
-- [ ] Documentação da API e da arquitetura
+- [x] Documentação da API e da arquitetura
 
 ## Autor
 

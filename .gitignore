@@ -1,3 +1,6 @@
 
 # Secrets
 .env
+
+# Cache de downloads dos geradores de dados
+tools/.cache/
