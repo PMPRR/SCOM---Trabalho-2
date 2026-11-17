@@ -59,10 +59,15 @@
      ate o total informado pelo servidor. */
   const ESTACOES_POR_PAGINA = 500;
 
-  /* Nomes de estacao vem do banco e, no caso das estacoes privadas, foram
+  /* Nomes de estacao vem do banco e, no caso das estacoes particulares, foram
      digitados por usuarios. Todo texto desse tipo passa por aqui antes de
      entrar no popup de um marcador, para que seja exibido como texto e nunca
      interpretado como HTML (XSS armazenado). */
+  /* Numeros na tela com virgula decimal, como se escreve no Brasil. */
+  function decimal(valor, casas) {
+    return valor.toFixed(casas).replace(".", ",");
+  }
+
   function escapar(texto) {
     return String(texto).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -456,7 +461,7 @@
         const t = temperaturaEm(centro[0], centro[1]);
         const c = confiancaEm(centro[0], centro[1]);
         partes.push(
-          "Temperatura interpolada de " + t.toFixed(1) +
+          "Temperatura interpolada de " + decimal(t, 1) +
           " graus Celsius, com confiança " + ROTULO_NIVEL[nivelDeConfianca(c)] + "."
         );
       }
@@ -486,7 +491,7 @@
         partes.push(
           "Estação mais próxima: " + perto.estacao.nome + ", a " +
           Math.round(perto.km) + " quilômetros, " +
-          perto.estacao.temperatura.toFixed(1) + " graus Celsius."
+          decimal(perto.estacao.temperatura, 1) + " graus Celsius."
         );
       }
 
@@ -774,10 +779,10 @@
       const temps = ESTACOES.map(function (e) { return e.temperatura; });
       alvo.textContent =
         "Interpolado a partir de " + ESTACOES.length + " estações, entre " +
-        Math.min.apply(null, temps).toFixed(1) + " e " +
-        Math.max.apply(null, temps).toFixed(1) + " graus Celsius. Em " +
+        decimal(Math.min.apply(null, temps), 1) + " e " +
+        decimal(Math.max.apply(null, temps), 1) + " graus Celsius. Em " +
         Math.round(fracaoBaixa * 100) + "% do território não há estação próxima " +
-        "o bastante, e a area aparece esmaecida.";
+        "o bastante, e a área aparece esmaecida.";
     }
 
     /* ---------------------------------------------------------------------
@@ -1732,7 +1737,7 @@
 
       /* Dica ao passar o mouse: o nome e a temperatura, sem precisar clicar. */
       marcador.bindTooltip(
-        escapar(estacao.nome) + " &middot; " + estacao.temperatura.toFixed(1) + " &deg;C",
+        escapar(estacao.nome) + " &middot; " + decimal(estacao.temperatura, 1) + " &deg;C",
         { direction: "top", offset: [0, -8] }
       );
 
@@ -1748,7 +1753,7 @@
        so de chuva nao tem temperatura. */
     function resumoDaEstacao(estacao) {
       if (typeof estacao.temperatura === "number") {
-        return estacao.nome + ", " + estacao.temperatura.toFixed(1) + " graus Celsius";
+        return estacao.nome + ", " + decimal(estacao.temperatura, 1) + " graus Celsius";
       }
       return estacao.nome + ", " + mm(estacao.chuva.toFixed(1)) + " milímetros de chuva na última hora";
     }

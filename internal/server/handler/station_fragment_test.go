@@ -111,7 +111,7 @@ func TestCardsEmptyDatabase(t *testing.T) {
 func TestCardFormatsTheReading(t *testing.T) {
 	owner := int64(3)
 	repo := &fakeRepo{stations: []domain.Station{{
-		ID: 7, Name: "Sorocaba - Campus", InstituteName: "Estação privada", InstituteCode: "privada", OwnerID: &owner, Active: true,
+		ID: 7, Name: "Sorocaba - Campus", InstituteName: "Estação particular", InstituteCode: domain.OperatorInstitute, OwnerID: &owner, Active: true,
 		Latest: &domain.Observation{
 			ObservedAt:   time.Now().Add(-20 * time.Minute),
 			TemperatureC: f32(24.13), WindSpeedMS: f32(3.33), WindDirDeg: i16(160),
@@ -126,8 +126,8 @@ func TestCardFormatsTheReading(t *testing.T) {
 	}
 	for _, piece := range []string{
 		"Sorocaba - Campus",
-		"Estação privada &middot; confiança média",
-		"<dd>24.1 °C</dd>",
+		"Estação particular &middot; confiança média",
+		"<dd>24,1 °C</dd>",
 		"<dd>12 km/h de sul</dd>", // 3.33 m/s; 160 degrees rounds to south
 		"<dd>sem dado</dd>",       // no rain sensor
 	} {

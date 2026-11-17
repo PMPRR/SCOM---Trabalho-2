@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/PMPRR/SCOM---Trabalho-2/internal/domain"
@@ -90,11 +91,13 @@ func newStationCard(st domain.Station, withID bool) stationCard {
 	return card
 }
 
+// formatValue writes a reading with a decimal comma, as numbers are written
+// in Brazil: "24,3 °C".
 func formatValue(v *float32, format string) string {
 	if v == nil {
 		return noData
 	}
-	return fmt.Sprintf(format, *v)
+	return strings.Replace(fmt.Sprintf(format, *v), ".", ",", 1)
 }
 
 // formatWind converts m/s (database) to km/h (screen) and names the
@@ -110,4 +113,3 @@ func formatWind(speedMS *float32, dirDeg *int16) string {
 	sector := int(math.Round(float64((int(*dirDeg)%360+360)%360)/45)) % 8
 	return text + " de " + compassRose[sector]
 }
-
