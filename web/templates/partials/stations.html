@@ -1,0 +1,51 @@
+{{/* Fragmentos da lista de estacoes, trocados na pagina pelo HTMX.
+     Recebem as views de internal/server/handler/station_view.go. */}}
+
+{{define "station_list"}}
+<p class="station-list-status" id="station-list-status">
+    {{if eq .Total 0}}Nenhuma estação cadastrada ainda.
+    {{else if eq .Total 1}}1 estação cadastrada.
+    {{else}}{{.Total}} estações cadastradas.{{end}}
+</p>
+<ul class="station-grid" id="station-grid" role="list">
+    {{template "station_items" .}}
+</ul>
+{{end}}
+
+{{/* Os cartoes de uma pagina. O botao final busca a pagina seguinte e e
+     substituido por ela (hx-swap="outerHTML" no proprio <li>). */}}
+{{define "station_items"}}
+{{range .Cards}}
+<li>{{template "station_card" .}}</li>
+{{end}}
+{{if .NextURL}}
+<li class="station-more">
+    <button class="btn btn-secondary" type="button"
+        hx-get="{{.NextURL}}"
+        hx-target="closest li"
+        hx-swap="outerHTML">Carregar mais estações</button>
+</li>
+{{end}}
+{{end}}
+
+{{define "station_card"}}
+<article class="station-card"{{if .DOMID}} id="{{.DOMID}}" tabindex="-1"{{end}}>
+    <h3>{{.Name}}</h3>
+    <p class="station-card-meta">{{.Institute}}{{if .Confidence}} &middot; confiança {{.Confidence}}{{end}}</p>
+    {{if .HasReading}}
+    <dl class="station-readings">
+        <dt>Temperatura</dt><dd>{{.Temperature}}</dd>
+        <dt>Vento</dt><dd>{{.Wind}}</dd>
+        <dt>Chuva (1 h)</dt><dd>{{.Rain}}</dd>
+    </dl>
+    <p class="station-card-meta">Atualizado em <time datetime="{{.UpdatedISO}}">{{.UpdatedText}}</time></p>
+    {{else}}
+    <p class="station-card-meta">Ainda sem leitura.</p>
+    {{end}}
+</article>
+{{end}}
+
+{{/* Cartao de uma estacao sozinha: o conteudo do balao que o mapa abre. */}}
+{{define "station_detail"}}
+{{template "station_card" .}}
+{{end}}
