@@ -5,8 +5,8 @@ package domain
 // carries the station it belongs to, because a source may report a station
 // the system has never seen.
 type Reading struct {
-	InstituteCode string // institutes.code, e.g. "inmet"
-	ExternalCode  string // the station's code at the source, e.g. "A701"
+	InstituteCode string // institutes.code, e.g. "cemaden"
+	ExternalCode  string // the station's code at the source, e.g. "355030801A"
 	StationName   string
 	Lat           float64
 	Lon           float64

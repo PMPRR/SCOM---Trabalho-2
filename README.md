@@ -46,7 +46,7 @@ handler ──► service ──► repository ──► domain
 │   ├── domain/                   Estação, observação, leitura e erros
 │   ├── repository/               Consultas e gravações (pgx)
 │   ├── service/                  Regras de estações e de coleta
-│   ├── ingest/                   Open-Meteo, METAR (NOAA), INMET e CEMADEN
+│   ├── ingest/                   Open-Meteo e CEMADEN
 │   └── server/
 │       ├── router.go             Rotas e montagem das camadas
 │       ├── handler/              Páginas e API de estações
@@ -97,7 +97,6 @@ em `DATABASE_URL`. O arquivo `.env` não é versionado.
 | `DATABASE_URL` | URL de conexão com o PostgreSQL | obrigatória |
 | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | Credenciais do contêiner do banco | — |
 | `INGEST_INTERVAL` | Intervalo da coleta automática (`1h`, `30m`; mínimo `10m`) | desligada |
-| `INMET_TOKEN` | Token da API do INMET | fonte desligada |
 | `CEMADEN_EMAIL`, `CEMADEN_PASSWORD` | Conta da PED do CEMADEN; o token é renovado sozinho | fonte desligada |
 | `CEMADEN_TOKEN` | Alternativa: token gerado à mão, válido por cerca de 4 h | fonte desligada |
 
@@ -173,9 +172,7 @@ HTMX; passar o mouse sobre um marcador mostra uma dica com nome e temperatura.
 
 | Fonte | Credencial | O que fornece |
 |---|---|---|
-| METAR dos aeroportos (DECEA, via NOAA) | nenhuma | Temperatura e vento em 11 aeroportos |
 | Open-Meteo | nenhuma | Modelo numérico amostrado em 28 localidades |
-| INMET | `INMET_TOKEN` | Estações automáticas do Estado |
 | CEMADEN | conta da PED ou token | Chuva da última hora nos pluviômetros automáticos |
 
 Toda leitura é validada antes de ser gravada: posição dentro do Estado, data

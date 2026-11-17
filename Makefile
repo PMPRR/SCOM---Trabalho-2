@@ -14,8 +14,8 @@ run:
 test:
 	go test ./...
 
-# Coleta as fontes externas uma vez (Open-Meteo e METAR; INMET e CEMADEN se
-# houver credenciais no .env).
+# Coleta as fontes externas uma vez (Open-Meteo; CEMADEN se houver
+# credenciais no .env).
 ingest:
 	go run ./cmd/ingest
 
@@ -36,4 +36,3 @@ migrate-status:
 schema:
 	@$(COMPOSE) exec -T db pg_dump -U $(POSTGRES_USER) -d $(POSTGRES_DB) \
 		--schema-only --no-owner -T goose_db_version > db/schema.sql
-

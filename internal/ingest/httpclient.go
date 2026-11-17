@@ -139,9 +139,3 @@ func (n number) int16Ptr() *int16 {
 	v := int16(n.value)
 	return &v
 }
-
-// scaled converts units on the way in (knots to m/s, for instance).
-func (n number) scaled(factor float64) number {
-	n.value *= factor
-	return n
-}
