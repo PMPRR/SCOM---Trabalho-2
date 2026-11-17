@@ -13,7 +13,7 @@ type Config struct {
 
 func Load() (Config, error) {
 	cfg := Config{
-		Env:         getenv("APP_ENV", "key"),
+		Env:         getenv("APP_ENV", "dev"),
 		Addr:        getenv("APP_ADDR", ":8080"),
 		DatabaseURL: getenv("DATABASE_URL", ""),
 	}
