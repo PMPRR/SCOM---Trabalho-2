@@ -61,10 +61,12 @@ sessões e as decisões de projeto, está em
 │       └── middleware/           Log, recuperação de panic, sessão, perfil, CSRF e limite
 ├── migrations/                   Migrações goose (SQL)
 ├── tools/
-│   └── build-relevo.py           Gera relevo-sp.js a partir do SRTM30
+│   ├── build-relevo.py           Gera relevo-sp.js a partir do SRTM30
+│   └── estacao/                  Lado da estação: envio de leituras assinadas
 ├── docs/
 │   ├── arquitetura.md            Arquitetura, modelo de dados e segurança
-│   └── api.md                    Referência de todos os endpoints
+│   ├── api.md                    Referência de todos os endpoints
+│   └── estacao-particular.md     Envio automático pelas estações particulares
 ├── db/
 │   ├── schema.sql                Script de criação, gerado por `make schema`
 │   └── seed_dev.sql              Estações simuladas para desenvolvimento
@@ -119,7 +121,16 @@ make db            # sobe o PostGIS (use COMPOSE="docker compose" para Docker)
 make migrate-up    # cria as tabelas e os dados iniciais
 ```
 
-Alternativa sem goose: executar `db/schema.sql` diretamente no banco.
+Alternativa sem goose: `db/schema.sql` cria o banco inteiro de uma vez, com o
+esquema, os institutos e o registro das migrações (o goose depois vê o banco
+em dia):
+
+```sh
+make db
+make schema-load   # em vez de make migrate-up
+```
+
+Use um ou outro, num banco vazio.
 
 ### 3. Dados do mapa
 
@@ -203,6 +214,7 @@ códigos de status de cada uma estão em [docs/api.md](docs/api.md).
 | PUT | `/api/stations/{id}` | Substitui os dados de uma estação: 200 (exige login) |
 | PATCH | `/api/stations/{id}` | Ativa ou desativa, corpo `{"active": false}`: 200 (exige login) |
 | DELETE | `/api/stations/{id}` | Exclui a estação e as leituras dela: 204 (exige login) |
+| POST | `/api/stations/{id}/readings` | Leitura enviada pela própria estação, assinada com a chave Ed25519 dela: 201 |
 | GET | `/healthz` | Estado do servidor e do banco (JSON) |
 | GET | `/static/...` | Arquivos estáticos |
 
@@ -234,6 +246,7 @@ Há três níveis de acesso:
 | Editar ou excluir estação | não (401) | só as suas (403 nas outras) | as cadastradas no site |
 | Ativar ou desativar estação | não (401) | só as suas (403 nas outras) | todas, inclusive as oficiais |
 | Editar ou excluir estação oficial | não (401) | não (403) | não (409) |
+| Cadastrar chave de envio automático | não (401) | nas suas | nas particulares |
 
 Como funciona:
 
@@ -304,6 +317,19 @@ curl -i http://localhost:8080/api/stations \
   -d '{"external_code":"sitio-01","name":"Sítio","lat":-23.55,"lon":-46.63}'
 ```
 
+### Envio automático pelas próprias estações
+
+Uma estação particular pode mandar as próprias leituras, a cada intervalo,
+seja um microcontrolador (ESP32) ou um computador de placa única (Raspberry
+Pi). O dono cria uma chave com `ssh-keygen -t ed25519`, cola a chave pública
+no painel e escolhe o intervalo; a estação assina cada leitura com a chave
+privada e envia para `POST /api/stations/{id}/readings`. O servidor guarda só
+a chave pública, recusa envios antes do intervalo e mostra no painel quando a
+estação atrasa.
+
+O guia, com o protocolo e os clientes prontos (`tools/estacao/`), está em
+[docs/estacao-particular.md](docs/estacao-particular.md).
+
 O painel usa HTMX: a busca filtra enquanto se digita, ativar troca só a linha
 da tabela e excluir pede confirmação e remove a linha. O formulário tem um
 mapa que preenche latitude e longitude com um clique e mostra o município do
@@ -334,7 +360,8 @@ público). Eles aparecem na página do mapa.
 | `make seed-dev` | Grava as estações simuladas |
 | `make promote-admin EMAIL=...` | Promove uma conta cadastrada a administrador |
 | `make migrate-up` / `migrate-down` / `migrate-status` | Migrações |
-| `make schema` | Regera `db/schema.sql` a partir do banco |
+| `make schema` | Regera `db/schema.sql` a partir do banco: esquema, institutos e versão das migrações |
+| `make schema-load` | Cria o banco a partir de `db/schema.sql`, sem o goose |
 
 ## Modelo de dados
 
@@ -345,6 +372,9 @@ público). Eles aparecem na página do mapa.
 | `observations` | Medições por estação e instante |
 | `users` | Usuários, com perfil `operator` ou `admin` |
 | `sessions` | Sessões abertas: hash do token, usuário e validade |
+
+As estações particulares guardam também a chave pública de envio, a
+impressão digital dela, o intervalo e o último envio (migração 00012).
 
 ## Roadmap
 
@@ -359,6 +389,7 @@ público). Eles aparecem na página do mapa.
 - [x] Autenticação e controle de acesso (`v0.6-auth`)
 - [x] Cadastro, alteração e exclusão de estações (`v0.7-stations-crud`)
 - [x] Documentação da API e da arquitetura
+- [x] Envio automático de leituras pelas estações particulares
 
 ## Autor
 
