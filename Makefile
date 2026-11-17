@@ -3,7 +3,7 @@ export
 
 COMPOSE ?= podman compose
 
-.PHONY: db run test ingest seed-dev migrate-up migrate-down migrate-status schema
+.PHONY: db run test ingest seed-dev promote-admin migrate-up migrate-down migrate-status schema
 
 db:
 	$(COMPOSE) up -d db
@@ -23,6 +23,16 @@ ingest:
 seed-dev:
 	@$(COMPOSE) exec -T db psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) \
 		-v ON_ERROR_STOP=1 < db/seed_dev.sql
+
+# Promove uma conta ja cadastrada a administrador: make promote-admin EMAIL=ana@example.com
+# Nenhum formulario do site cria administradores; o primeiro nasce aqui. O
+# e-mail entra como variavel do psql (:'email'), que o cita com seguranca,
+# e nao colado no texto do SQL.
+promote-admin:
+	@test -n "$(EMAIL)" || { echo "uso: make promote-admin EMAIL=ana@example.com"; exit 1; }
+	@echo "UPDATE users SET role = 'admin' WHERE email = lower(:'email') RETURNING email, role;" \
+		| $(COMPOSE) exec -T db psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) \
+			-v ON_ERROR_STOP=1 -v email="$(EMAIL)"
 
 migrate-up:
 	@goose -dir migrations postgres "$(DATABASE_URL)" up
