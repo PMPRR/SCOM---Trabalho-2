@@ -1,6 +1,6 @@
 {{define "title"}}Criar conta - ClimaSP{{end}}
 
-{{define "description"}}Crie sua conta no ClimaSP e acompanhe as estações meteorológicas da sua região no Estado de São Paulo.{{end}}
+{{define "description"}}Crie sua conta no ClimaSP e cadastre as suas estações meteorológicas no Estado de São Paulo.{{end}}
 
 {{define "head_page"}}
 <link rel="stylesheet" href="/static/css/auth.css">
@@ -13,7 +13,7 @@
         <section class="auth-card" aria-labelledby="signup-heading">
             <h1 id="signup-heading">Criar conta</h1>
             <p class="auth-lede">
-                Pedimos só o necessário para abrir o mapa já na sua região.
+                Pedimos só o necessário: nome, e-mail e senha.
             </p>
 
             <form class="auth-form" action="/cadastro" method="post"
@@ -79,34 +79,9 @@
                         required>
                 </div>
 
-                <div class="field">
-                    <label class="field-label" for="regiao">Região de interesse <span class="field-opcional">(opcional)</span></label>
-                    <select class="field-input" id="regiao" name="regiao" aria-describedby="regiao-ajuda">
-                        <option value="">Escolher depois</option>
-                        <option value="rmsp">Região Metropolitana de São Paulo</option>
-                        <option value="campinas">Campinas</option>
-                        <option value="sorocaba">Sorocaba</option>
-                        <option value="vale-paraiba">Vale do Paraíba e Litoral Norte</option>
-                        <option value="baixada-santista">Baixada Santista</option>
-                        <option value="registro">Registro e Vale do Ribeira</option>
-                        <option value="itapeva">Itapeva</option>
-                        <option value="central">Central (Araraquara e São Carlos)</option>
-                        <option value="ribeirao-preto">Ribeirão Preto</option>
-                        <option value="franca">Franca</option>
-                        <option value="barretos">Barretos</option>
-                        <option value="sao-jose-do-rio-preto">São José do Rio Preto</option>
-                        <option value="aracatuba">Araçatuba</option>
-                        <option value="bauru">Bauru</option>
-                        <option value="marilia">Marília</option>
-                        <option value="presidente-prudente">Presidente Prudente</option>
-                    </select>
-                    <p class="field-hint" id="regiao-ajuda">O mapa abre centralizado nela.</p>
-                </div>
-
                 <div class="field-check">
                     <input type="checkbox" id="termos" name="termos" required>
-                    <label for="termos">Li e aceito os termos de uso. [FAKE]</label>
-
+                    <label for="termos">Entendo que as estações e leituras que eu cadastrar ficam públicas no mapa.</label>
                 </div>
 
                 <button class="btn btn-primary" type="submit">Criar conta</button>

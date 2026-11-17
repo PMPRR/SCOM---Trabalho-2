@@ -114,7 +114,7 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (domain.Us
 		return domain.User{}, &domain.ValidationError{Field: "senha-confirma", Message: "As senhas não são iguais."}
 	}
 	if !in.AcceptedTerms {
-		return domain.User{}, &domain.ValidationError{Field: "termos", Message: "É preciso aceitar os termos de uso."}
+		return domain.User{}, &domain.ValidationError{Field: "termos", Message: "É preciso concordar que as estações cadastradas ficam públicas."}
 	}
 
 	hash, err := s.hasher.Hash(in.Password)
