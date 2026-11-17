@@ -1,0 +1,72 @@
+{{define "title"}}Entrar - ClimaSP{{end}}
+
+{{define "description"}}Entre na sua conta do ClimaSP para salvar regiões de interesse e acompanhar as estações meteorológicas do Estado de São Paulo.{{end}}
+
+{{define "head_page"}}
+<link rel="stylesheet" href="/static/css/auth.css">
+<script src="/static/js/auth.js" defer></script>
+{{end}}
+
+{{define "content"}}
+<main id="content">
+    <div class="auth">
+        <section class="auth-card" aria-labelledby="login-heading">
+            <h1 id="login-heading">Entrar</h1>
+            <p class="auth-lede">
+                Entre para voltar direto às estações que você acompanha.
+            </p>
+
+            <form class="auth-form" action="#" method="post">
+                <div class="field">
+                    <label class="field-label" for="email">E-mail</label>
+                    <input class="field-input"
+                        type="email"
+                        id="email"
+                        name="email"
+                        autocomplete="email"
+                        inputmode="email"
+                        required>
+                </div>
+
+                <div class="field">
+                    <label class="field-label" for="senha">Senha</label>
+                    <div class="field-group">
+                        <input class="field-input"
+                            type="password"
+                            id="senha"
+                            name="senha"
+                            autocomplete="current-password"
+                            required>
+                        <button class="field-toggle" type="button" data-toggle-senha="senha" hidden>Mostrar</button>
+                    </div>
+                </div>
+
+                <div class="auth-row">
+                    <div class="field-check">
+                        <input type="checkbox" id="lembrar" name="lembrar">
+                        <label for="lembrar">Manter conectado</label>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" type="submit">Entrar</button>
+                <p class="auth-aviso" id="auth-aviso" role="status" hidden></p>
+
+            </form>
+
+            <p class="auth-switch">
+                Ainda não tem conta? <a href="/cadastro">Criar conta</a>
+            </p>
+        </section>
+
+        <aside class="auth-aside" aria-labelledby="conta-heading">
+            <h2 id="conta-heading">O que a conta guarda</h2>
+            <ul class="auth-list" role="list">
+                <li>Suas regiões favoritas, já abertas no mapa quando você entra.</li>
+                <li>As estações que você acompanha, com o índice de confiança de cada medição.</li>
+                <li>A preferência entre tema claro e escuro, em qualquer dispositivo.</li>
+            </ul>
+            <p>O mapa e as medições continuam abertos a todos, sem conta. <a href="/mapa">Ver o mapa</a></p>
+        </aside>
+    </div>
+</main>
+{{end}}

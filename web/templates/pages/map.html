@@ -1,0 +1,250 @@
+{{define "title"}}Mapa interativo - ClimaSP{{end}}
+
+{{define "description"}}Mapa interativo com as condições meteorológicas das estações de coleta do Estado de São Paulo: temperatura, vento, chuva e índice de confiança.{{end}}
+
+{{define "head_vendor"}}<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">{{end}}
+
+{{define "head_page"}}
+<link rel="stylesheet" href="/static/css/map.css">
+<!-- defer preserva a ordem de execução: leaflet.js roda antes de map.js. -->
+<script src="/static/vendor/leaflet/leaflet.js" defer></script>
+<script src="/static/data/sp-geo.js" defer></script>
+<script src="/static/data/relevo-sp.js" defer></script>
+<script src="/static/data/sp-municipios.js" defer></script>
+<script src="/static/js/campo.js" defer></script>
+<script src="/static/js/map.js" defer></script>
+{{end}}
+
+{{define "content"}}
+<main id="content" class="map-page">
+    <h1>Mapa meteorológico do Estado de São Paulo</h1>
+
+    <div class="map-layout">
+        <section class="map-section" aria-label="Mapa interativo das estações">
+            <figure class="map-figure">
+                <div class="map-canvas"
+                    id="map"
+                    role="application"
+                    aria-label="Mapa das estações meteorológicas do Estado de São Paulo. Use as setas para mover o mapa e + ou − para aproximar. Clicar no mapa abre os dados da estação mais próxima; os mesmos dados estão na lista abaixo do mapa.">
+                </div>
+                <figcaption class="map-caption">
+                    Estações de coleta do Estado de São Paulo sobre a malha
+                    territorial do IBGE. A cor do marcador indica o índice de
+                    confiança da medição. Clique em um marcador, ou em qualquer
+                    ponto do mapa, para ver a estação mais próxima; a lista
+                    abaixo apresenta os mesmos
+                    dados em texto.
+                </figcaption>
+            </figure>
+            <p class="map-status" id="map-status" role="status"></p>
+        </section>
+
+        <aside class="map-aside" aria-labelledby="layers-heading">
+            <h2 id="layers-heading">O que mostrar no mapa</h2>
+
+            <!-- Cada grupo e um fieldset com a sua legend, e cada opcao tem
+                um label (for/id) e uma descricao curta, ligada ao controle
+                por aria-describedby. A escala de cores de uma opcao aparece
+                logo abaixo dela quando a opcao e ligada: quem liga a camada
+                nao precisa procurar a legenda no fim do painel. -->
+            <fieldset class="layer-toggles">
+                <legend class="layer-toggles-legend">Colorir o mapa por</legend>
+                <p class="layer-toggles-hint">Uma opção por vez.</p>
+
+                <div class="layer-toggle">
+                    <input type="radio" id="campo-temperatura" name="campo" value="temperatura" data-campo checked aria-describedby="campo-temperatura-desc">
+                    <label for="campo-temperatura">Temperatura</label>
+                    <p class="layer-toggle-desc" id="campo-temperatura-desc">Onde está mais quente e mais frio agora.</p>
+                    <span class="layer-preview layer-preview-temperatura" aria-hidden="true"></span>
+                </div>
+
+                <div class="layer-toggle">
+                    <input type="radio" id="campo-chuva" name="campo" value="chuva" data-campo aria-describedby="campo-chuva-desc">
+                    <label for="campo-chuva">Chuva</label>
+                    <p class="layer-toggle-desc" id="campo-chuva-desc">Quanto choveu na última hora.</p>
+                    <span class="layer-preview layer-preview-chuva" aria-hidden="true"></span>
+                </div>
+                <p class="layer-toggles-hint" id="chuva-aviso" hidden>
+                Chuva indisponível: nenhuma estação com leitura de chuva no
+                momento.
+                </p>
+
+                <div class="layer-toggle">
+                    <input type="radio" id="campo-confianca" name="campo" value="confianca" data-campo aria-describedby="campo-confianca-desc">
+                    <label for="campo-confianca">Confiança dos dados</label>
+                    <p class="layer-toggle-desc" id="campo-confianca-desc">Onde há estações próximas e leituras recentes.</p>
+                    <span class="layer-preview layer-preview-confianca" aria-hidden="true"></span>
+                </div>
+
+                <div class="layer-toggle">
+                    <input type="radio" id="campo-nenhum" name="campo" value="nenhum" data-campo aria-describedby="campo-nenhum-desc">
+                    <label for="campo-nenhum">Sem cor</label>
+                    <p class="layer-toggle-desc" id="campo-nenhum-desc">Só o mapa, sem área colorida.</p>
+                </div>
+
+                <!-- Escala do campo escolhido. Fica depois das opcoes, para
+                    que as quatro continuem juntas e visiveis; o conteudo e
+                    montado por map.js, porque as faixas e as porcentagens
+                    dependem das leituras do momento. -->
+                <div class="legend-block" id="bloco-temperatura" hidden>
+                    <h3>Escala de temperatura</h3>
+                    <dl class="legend legend-temperatura" id="legenda-temperatura"></dl>
+                    <p class="map-caption" id="temperatura-resumo"></p>
+                </div>
+                <div class="legend-block" id="bloco-chuva" hidden>
+                    <h3>Escala de chuva</h3>
+                    <dl class="legend legend-chuva" id="legenda-chuva"></dl>
+                    <p class="map-caption" id="chuva-resumo"></p>
+                </div>
+                <div class="legend-block" id="bloco-confianca" hidden>
+                    <h3>Níveis de confiança</h3>
+                    <dl class="legend" id="legenda-confianca"></dl>
+                    <p class="map-caption" id="campo-resumo"></p>
+                </div>
+            </fieldset>
+
+            <fieldset class="layer-toggles">
+                <legend class="layer-toggles-legend">Mostrar por cima</legend>
+                <p class="layer-toggles-hint">Marque quantas quiser.</p>
+
+                <div class="layer-toggle">
+                    <input type="checkbox" id="camada-estacoes" data-camada="estacoes" checked aria-describedby="camada-estacoes-desc">
+                    <label for="camada-estacoes">Estações</label>
+                    <p class="layer-toggle-desc" id="camada-estacoes-desc">Um círculo por estação com temperatura. Clique para ver a leitura.</p>
+                </div>
+
+                <div class="layer-toggle">
+                    <input type="checkbox" id="camada-pluviometros" data-camada="pluviometros" checked aria-describedby="camada-pluviometros-desc">
+                    <label for="camada-pluviometros">Pluviômetros</label>
+                    <p class="layer-toggle-desc" id="camada-pluviometros-desc">Um ponto por estação que só mede chuva.</p>
+                </div>
+                <p class="layer-toggles-hint" id="pluviometros-aviso" hidden>
+                Nenhum pluviômetro com leitura no momento.
+                </p>
+
+                <div class="layer-toggle">
+                    <input type="checkbox" id="camada-vento" data-camada="vento" aria-describedby="camada-vento-desc">
+                    <label for="camada-vento">Vento</label>
+                    <p class="layer-toggle-desc" id="camada-vento-desc">Setas que apontam para onde o vento sopra.</p>
+                </div>
+
+                <div class="layer-toggle">
+                    <input type="checkbox" id="camada-municipios" data-camada="municipios" aria-describedby="camada-municipios-desc">
+                    <label for="camada-municipios">Divisas dos municípios</label>
+                    <p class="layer-toggle-desc" id="camada-municipios-desc">O contorno dos 645 municípios do Estado.</p>
+                </div>
+                <p class="layer-toggles-hint" id="municipios-aviso" hidden>
+                Divisas indisponíveis: falta o arquivo
+                <code>web/static/data/sp-municipios.js</code>.
+                </p>
+
+                <div class="legend-block" id="bloco-estacoes">
+                    <h3>Cor dos círculos</h3>
+                    <dl class="legend">
+                        <div class="legend-item">
+                            <dt><span class="legend-swatch legend-swatch-high" aria-hidden="true"></span>Confiança alta</dt>
+                            <dd>Estação oficial com leitura recente.</dd>
+                        </div>
+                        <div class="legend-item">
+                            <dt><span class="legend-swatch legend-swatch-medium" aria-hidden="true"></span>Confiança média</dt>
+                            <dd>Estação privada com leitura recente.</dd>
+                        </div>
+                        <div class="legend-item">
+                            <dt><span class="legend-swatch legend-swatch-low" aria-hidden="true"></span>Confiança baixa</dt>
+                            <dd>Leitura com 3 horas ou mais, ou valor de modelo numérico.</dd>
+                        </div>
+                    </dl>
+                </div>
+                <div class="legend-block" id="bloco-pluviometros">
+                    <h3>Pontos dos pluviômetros</h3>
+                    <dl class="legend">
+                        <div class="legend-item">
+                            <dt><span class="legend-swatch legend-swatch-seco" aria-hidden="true"></span>Ponto vazio</dt>
+                            <dd>Não choveu na última hora.</dd>
+                        </div>
+                        <div class="legend-item">
+                            <dt><span class="legend-swatch layer-preview-chuva" aria-hidden="true"></span>Ponto colorido</dt>
+                            <dd>Choveu; a cor segue a escala de chuva.</dd>
+                        </div>
+                    </dl>
+                </div>
+
+                <div class="legend-block" id="bloco-vento" hidden>
+                    <h3>Escala de vento</h3>
+                    <dl class="legend legend-vento" id="legenda-vento"></dl>
+                    <p class="map-caption" id="vento-resumo"></p>
+                </div>
+            </fieldset>
+
+            <fieldset class="layer-toggles">
+                <legend class="layer-toggles-legend">Relevo</legend>
+
+                <div class="layer-toggle">
+                    <input type="checkbox" id="camada-hipsometria" data-camada="hipsometria" aria-describedby="camada-hipsometria-desc">
+                    <label for="camada-hipsometria">Altitude em cores</label>
+                    <p class="layer-toggle-desc" id="camada-hipsometria-desc">Do litoral às serras, em faixas de altitude.</p>
+                </div>
+
+                <div class="layer-toggle">
+                    <input type="checkbox" id="camada-curvas" data-camada="curvas" aria-describedby="camada-curvas-desc">
+                    <label for="camada-curvas">Curvas de nível</label>
+                    <p class="layer-toggle-desc" id="camada-curvas-desc">Uma linha a cada 200 m de altitude.</p>
+                </div>
+
+                <p class="layer-toggles-hint" id="relevo-aviso" hidden>
+                Relevo indisponível: falta o arquivo
+                <code>web/static/data/relevo-sp.js</code>, gerado no Trabalho I
+                por <code>tools/build-sp-geo.py</code>.
+                </p>
+
+                <!-- Escala altimetrica, montada por map.js a partir de
+                    relevo-sp.js. -->
+                <div class="legend-block" id="bloco-relevo" hidden>
+                    <h3>Escala de altitude</h3>
+                    <dl class="legend legend-relevo" id="legenda-relevo"></dl>
+                </div>
+            </fieldset>
+
+            <!-- Os 645 contornos municipais sao uma referencia puramente
+                visual: nao ha como percorre-los pelo teclado sem transformar o
+                mapa numa armadilha de TAB. Esta lista e o equivalente
+                acessivel: um controle nativo, pesquisavel pela digitacao, que
+                da em texto a mesma informacao que a divisa da pelo desenho. -->
+            <div class="layer-select">
+                <label for="municipio-seletor">Ir para um município</label>
+                <select id="municipio-seletor" aria-describedby="municipio-ajuda">
+                    <option value="">Selecione um município</option>
+                </select>
+                <p class="layer-toggles-hint" id="municipio-ajuda">
+                O mapa enquadra o município, e o texto abaixo do mapa descreve
+                a temperatura, a chuva, o vento e a estação mais próxima.
+                </p>
+            </div>
+        </aside>
+    </div>
+
+    <section class="station-list" aria-labelledby="station-list-heading">
+        <h2 id="station-list-heading">Estações</h2>
+        <noscript>
+            <p>O mapa interativo e a lista de estações dependem de JavaScript. Ative o JavaScript para vê-los.</p>
+        </noscript>
+
+        <!-- A lista inteira vem do servidor como HTML: o HTMX a busca ao
+            carregar a pagina e a renova a cada 5 minutos, sem recarregar
+            o mapa. -->
+        <div id="station-list"
+            hx-get="/estacoes"
+            hx-trigger="load, every 5m"
+            hx-swap="innerHTML">
+            <p class="station-list-status" id="station-list-status">Carregando estações...</p>
+        </div>
+
+        <!-- Creditos exigidos pelos termos de uso das fontes. -->
+        <p class="map-caption">
+            Fontes dos dados: INMET; boletins METAR dos aeroportos (DECEA, via NOAA
+            Aviation Weather Center); Open-Meteo (modelo numérico, CC BY 4.0);
+            Dados da Rede Observacional do CEMADEN/MCTIC.
+        </p>
+    </section>
+</main>
+{{end}}

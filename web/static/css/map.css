@@ -1,0 +1,521 @@
+/* ==========================================================================
+   Exclusive styles for the map.html
+   ========================================================================== */
+
+.map-page {
+  width: min(100% - 2 * var(--gutter), var(--wrap));
+  margin-inline: auto;
+  padding-block: var(--sp-5) var(--sp-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.map-layout {
+  display: grid;
+  gap: var(--sp-5);
+}
+
+.map-figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* A altura e reservada aqui, antes de o Leaflet montar: o contentor nunca
+   colapsa para zero e o deslocamento de layout (CLS) fica proximo de zero. */
+.map-canvas {
+  block-size: clamp(20rem, 55vh, 34rem);
+  /* Contem os z-index internos do Leaflet (paneis em 400, controles em 1000),
+     que de outra forma passariam por cima do cabecalho fixo. */
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius);
+  background-color: var(--c-surface);
+}
+
+.map-caption {
+  max-width: var(--measure);
+  color: var(--c-muted);
+  font-size: var(--fs-sm);
+}
+
+.map-status {
+  min-height: 1.5rem;
+  color: var(--c-muted);
+  font-size: var(--fs-sm);
+}
+
+/* Sem ladrilhos, o fundo do mapa e a propria pagina: os creditos e os
+   controles passam a usar as variaveis do tema. */
+.leaflet-container {
+  background-color: var(--c-bg);
+  font: inherit;
+}
+
+.leaflet-container a:focus-visible,
+.leaflet-container button:focus-visible {
+  outline: var(--focus-width) solid var(--c-accent);
+  outline-offset: 2px;
+}
+
+/* O seletor repete .leaflet-container de proposito: o Leaflet define o fundo
+   branco da atribuicao com essa mesma especificidade, e sem ela o tema escuro
+   ficava com texto claro sobre fundo claro. */
+.leaflet-container .leaflet-control-attribution {
+  background-color: var(--c-surface);
+  color: var(--c-muted);
+  font-size: var(--fs-sm);
+}
+
+.leaflet-container .leaflet-control-attribution a {
+  color: var(--c-accent);
+}
+
+.leaflet-bar a {
+  background-color: var(--c-surface);
+  color: var(--c-fg);
+  border-block-end-color: var(--c-line);
+}
+
+.leaflet-bar a:hover {
+  background-color: var(--c-bg);
+  color: var(--c-accent);
+}
+
+/* ==========================================================================
+   Seletor de camadas
+   ========================================================================== */
+
+.layer-toggles {
+  margin: 0 0 var(--sp-5);
+  padding: 0;
+  border: 0; /* o fieldset existe pela semantica, nao pela moldura */
+}
+
+.layer-toggles-legend {
+  padding: 0;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+/* A dica logo abaixo do titulo do grupo diz como ele funciona (uma opcao ou
+   varias) e faz o espaco antes da primeira opcao. */
+.layer-toggles-legend + .layer-toggles-hint {
+  margin-block: 0 var(--sp-2);
+}
+
+.layer-toggles-legend + .layer-toggle {
+  margin-block-start: var(--sp-2);
+}
+
+/* Uma opcao do painel: controle, nome, descricao e, nos campos, uma amostra
+   da escala de cores. A linha inteira responde ao clique, e a opcao ligada
+   fica destacada -- o estado do mapa se le de relance, sem procurar a bolinha
+   marcada. */
+.layer-toggle {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  column-gap: var(--sp-3);
+  align-items: center;
+  min-height: 2.75rem; /* alvo de toque de 44px */
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.layer-toggle + .layer-toggle,
+.legend-block + .layer-toggle,
+.layer-toggles-hint + .layer-toggle {
+  margin-block-start: var(--sp-1);
+}
+
+.layer-toggle:hover {
+  background-color: var(--c-bg);
+}
+
+.layer-toggle:has(input:checked) {
+  border-color: var(--c-accent);
+  background-color: var(--c-bg);
+}
+
+.layer-toggle input {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  accent-color: var(--c-accent);
+  cursor: pointer;
+}
+
+.layer-toggle label {
+  grid-column: 2;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* O label se estende sobre a linha toda: clicar na descricao ou na amostra
+   tambem liga a opcao, sem que elas precisem estar dentro do label (o que
+   faria o leitor de tela ler a descricao como parte do nome). */
+.layer-toggle label::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.layer-toggle-desc {
+  grid-column: 2;
+  color: var(--c-muted);
+  font-size: var(--fs-sm);
+}
+
+/* Amostra da escala de cores do campo, montada com as mesmas variaveis de
+   tema que pintam o mapa. */
+.layer-preview {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  inline-size: 2.5rem;
+  block-size: 0.75rem;
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius-pill);
+}
+
+.layer-preview-temperatura {
+  background-image: linear-gradient(to right,
+    var(--temp-1), var(--temp-4), var(--temp-7), var(--temp-9), var(--temp-12));
+}
+
+.layer-preview-chuva {
+  background-image: linear-gradient(to right,
+    var(--chuva-1), var(--chuva-3), var(--chuva-5), var(--chuva-7));
+}
+
+.layer-preview-confianca {
+  background-image: linear-gradient(to right,
+    var(--c-alert) 0 33%, var(--c-warn) 33% 66%, var(--c-accent) 66%);
+}
+
+.layer-toggle:has(input:disabled) {
+  opacity: 0.6;
+}
+
+.layer-toggle:has(input:disabled):hover {
+  background-color: transparent;
+}
+
+.layer-toggle input:disabled,
+.layer-toggle input:disabled + label,
+.layer-toggle input:disabled + label::after {
+  cursor: not-allowed;
+}
+
+/* Equivalente acessivel das divisas municipais. Controle nativo de proposito:
+   um <select> ja vem pesquisavel pela digitacao, operavel so com o teclado e
+   anunciado pelo leitor de tela, sem uma linha de ARIA. */
+.layer-select {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-block-start: var(--sp-4);
+  border-block-start: 1px solid var(--c-line);
+}
+
+.layer-select label {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+.layer-select select {
+  min-height: 2.75rem; /* alvo de toque de 44px */
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius);
+  background-color: var(--c-bg);
+  color: var(--c-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.layer-select select:disabled {
+  cursor: not-allowed;
+  color: var(--c-muted);
+  opacity: 0.6;
+}
+
+.layer-toggles-hint {
+  margin-block-start: var(--sp-2);
+  color: var(--c-muted);
+  font-size: var(--fs-sm);
+}
+
+.layer-toggles-hint[hidden] {
+  display: none;
+}
+
+/* ==========================================================================
+   Legend
+   ========================================================================== */
+
+.map-aside {
+  padding: var(--sp-4);
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius);
+  background-color: var(--c-surface);
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  margin-block-start: var(--sp-4);
+}
+
+/* display: flex vence a regra display: none que o navegador aplica a
+   [hidden], entao o atributo precisa ser reafirmado aqui -- do contrario as
+   legendas montadas por map.js aparecem mesmo escondidas. */
+.legend[hidden],
+.legend-block[hidden] {
+  display: none;
+}
+
+/* A escala de uma opcao fica presa a ela por uma linha lateral, recuada ate
+   o texto da opcao: le-se como continuacao da linha de cima. */
+.legend-block {
+  margin: var(--sp-2) 0 var(--sp-3) var(--sp-4);
+  padding-inline-start: var(--sp-3);
+  border-inline-start: 2px solid var(--c-accent);
+}
+
+.legend-block h3 {
+  font-size: var(--fs-sm);
+  color: var(--c-muted);
+}
+
+.legend-block .legend {
+  margin-block-start: var(--sp-2);
+  gap: var(--sp-2);
+}
+
+.legend-item dt {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-weight: 600;
+}
+
+.legend-item dd {
+  margin-inline-start: calc(var(--sp-4) + var(--sp-2));
+  color: var(--c-muted);
+  font-size: var(--fs-sm);
+}
+
+.legend-swatch {
+  inline-size: var(--sp-4);
+  block-size: var(--sp-4);
+  flex: none;
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius-pill);
+}
+
+.legend-swatch-high {
+  background-color: var(--c-accent);
+}
+
+.legend-swatch-medium {
+  background-color: var(--c-warn);
+}
+
+.legend-swatch-low {
+  background-color: var(--c-alert);
+}
+
+/* Faixas sao areas, nao pontos: quadradas, como nas escalas impressas. A cor
+   vem por atributo style, montada em JS a partir da rampa do tema. */
+.legend-swatch-faixa {
+  border-radius: var(--radius);
+}
+
+/* As escalas continuas -- altimetrica, termica e de vento -- tem muitas
+   faixas: compactas e legiveis de cima para baixo, como nas escalas
+   impressas. */
+.legend-relevo,
+.legend-temperatura,
+.legend-chuva,
+.legend-vento {
+  gap: var(--sp-1);
+}
+
+.legend-relevo .legend-item dt,
+.legend-temperatura .legend-item dt,
+.legend-chuva .legend-item dt,
+.legend-vento .legend-item dt {
+  font-weight: 400;
+  font-size: var(--fs-sm);
+}
+
+/* Nas escalas com porcentagem, a faixa e a sua fracao do territorio ficam na
+   mesma linha: metade da altura, e os numeros alinhados em coluna. */
+.legend-temperatura .legend-item,
+.legend-chuva .legend-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: var(--sp-3);
+  align-items: baseline;
+}
+
+.legend-temperatura .legend-item dd,
+.legend-chuva .legend-item dd {
+  margin-inline-start: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A nota do veu nao tem numero: ocupa a largura toda, com o texto abaixo. */
+.legend-temperatura .legend-item-nota,
+.legend-chuva .legend-item-nota {
+  display: block;
+  margin-block-start: var(--sp-2);
+}
+
+.legend-temperatura .legend-item-nota dd,
+.legend-chuva .legend-item-nota dd {
+  margin-inline-start: calc(var(--sp-4) + var(--sp-2));
+}
+
+/* O veu nao e um tom da escala: e a ausencia de dado. Recebe a cor da pagina,
+   a mesma que o cobre no mapa, e nao um tom da rampa termica. */
+/* Amostra da faixa "sem chuva": nao e pintada no mapa, entao a legenda
+   mostra so o contorno. */
+.legend-swatch-seco {
+  border: 1px solid var(--c-line);
+  background-color: transparent;
+}
+
+.legend-swatch-veu {
+  border-radius: var(--radius);
+  background-color: var(--c-bg);
+}
+
+/* ==========================================================================
+   Lista textual das estacoes (alternativa acessivel ao mapa)
+   ========================================================================== */
+
+.station-list-status {
+  color: var(--c-muted);
+  font-size: var(--fs-sm);
+}
+
+.station-grid {
+  display: grid;
+  gap: var(--sp-4);
+  margin-block-start: var(--sp-4);
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+/* Botao "Carregar mais", centrado na celula que os proximos cartoes ocupam. */
+.station-more {
+  display: grid;
+  place-items: center;
+}
+
+.station-card {
+  block-size: 100%;
+  padding: var(--sp-4);
+  border: 1px solid var(--c-line);
+  border-radius: var(--radius);
+  background-color: var(--c-surface);
+}
+
+.station-card h3 {
+  font-size: var(--fs-lg);
+}
+
+.station-card-meta {
+  color: var(--c-muted);
+  font-size: var(--fs-sm);
+}
+
+.station-readings {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-1) var(--sp-3);
+  margin-block-start: var(--sp-3);
+}
+
+.station-readings dt {
+  color: var(--c-muted);
+}
+
+.station-readings dd {
+  margin: 0;
+  font-family: var(--font-num);
+}
+
+/* ==========================================================================
+   Breakpoints
+   ========================================================================== */
+
+@media (min-width: 64em) {
+  .map-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 18rem);
+    align-items: start;
+  }
+
+  .map-canvas {
+    block-size: clamp(24rem, 62vh, 40rem);
+  }
+}
+
+/* ==========================================================================
+   Balao e dica das estacoes no mapa
+   --------------------------------------------------------------------------
+   O Leaflet pinta baloes e dicas de branco com texto escuro. Aqui eles
+   passam a usar as cores do tema, para nao destoar no tema escuro.
+   ========================================================================== */
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip,
+.leaflet-tooltip {
+  background-color: var(--c-surface);
+  color: var(--c-fg);
+}
+
+.leaflet-tooltip {
+  border-color: var(--c-line);
+}
+
+.leaflet-tooltip-top::before {
+  border-top-color: var(--c-surface);
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+  color: var(--c-muted);
+}
+
+.leaflet-popup-content {
+  margin: var(--sp-4);
+  font-family: var(--font-ui);
+  font-size: var(--fs-base);
+  line-height: var(--lh-body);
+}
+
+/* Dentro do balao o cartao dispensa moldura: o balao ja e a moldura. */
+.station-popup .station-card {
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+}
+
+/* O Leaflet da margem vertical a todo paragrafo do balao; o cartao ja tem
+   o seu proprio espacamento. */
+.leaflet-popup-content .station-popup p {
+  margin: 0;
+}
+
+.leaflet-popup-content .station-popup .station-popup-note {
+  margin-block-end: var(--sp-2);
+  color: var(--c-muted);
+  font-size: var(--fs-sm);
+}
