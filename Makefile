@@ -3,7 +3,7 @@ export
 
 COMPOSE ?= podman compose
 
-.PHONY: db run test ingest seed-dev promote-admin migrate-up migrate-down migrate-status schema
+.PHONY: db run test ingest seed-dev promote-admin migrate-up migrate-down migrate-status schema schema-load
 
 db:
 	$(COMPOSE) up -d db
@@ -43,6 +43,26 @@ migrate-down:
 migrate-status:
 	@goose -dir migrations postgres "$(DATABASE_URL)" status
 
+# Regera db/schema.sql, o script que cria o banco inteiro sem o goose:
+#   - o esquema, so com os objetos do projeto (a imagem do PostGIS cria
+#     sozinha os schemas tiger, tiger_data e topology e outras extensoes,
+#     que o projeto nao usa);
+#   - as linhas de institutes, sem as quais coleta e cadastro nao funcionam;
+#   - as linhas de goose_db_version, para o goose ver o banco em dia.
+# As linhas \restrict do pg_dump mais novo saem: um psql mais antigo nao as
+# conhece. Grava num arquivo temporario e so troca no fim, para uma falha no
+# meio nao deixar o script vazio.
 schema:
-	@$(COMPOSE) exec -T db pg_dump -U $(POSTGRES_USER) -d $(POSTGRES_DB) \
-		--schema-only --no-owner -T goose_db_version > db/schema.sql
+	@{ echo "-- Gerado por make schema. Cria o banco do ClimaSP inteiro: psql -d BANCO -f db/schema.sql"; \
+	  $(COMPOSE) exec -T db pg_dump -U $(POSTGRES_USER) -d $(POSTGRES_DB) --schema-only --no-owner \
+		--extension=postgis -N tiger -N tiger_data -N topology && \
+	  $(COMPOSE) exec -T db pg_dump -U $(POSTGRES_USER) -d $(POSTGRES_DB) --data-only --no-owner --inserts \
+		-t public.institutes -t public.goose_db_version; } > db/schema.sql.tmp \
+		&& sed '/^\\\(un\)\?restrict /d' db/schema.sql.tmp > db/schema.sql \
+		&& rm -f db/schema.sql.tmp \
+		|| { rm -f db/schema.sql.tmp; echo "make schema falhou; db/schema.sql nao mudou"; exit 1; }
+
+# Cria o banco a partir de db/schema.sql, sem o goose. So num banco vazio:
+# o script cria tudo e para no primeiro erro.
+schema-load:
+	@$(COMPOSE) exec -T db psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) -v ON_ERROR_STOP=1 -q -o /dev/null < db/schema.sql
