@@ -235,7 +235,7 @@ func TestConfidenceRanksSourcesAndAge(t *testing.T) {
 		want    domain.Confidence
 	}{
 		{"official station, fresh reading", domain.Station{InstituteCode: "inmet", Latest: fresh}, domain.ConfidenceHigh},
-		{"private station, fresh reading", domain.Station{InstituteCode: "privada", OwnerID: &owner, Latest: fresh}, domain.ConfidenceMedium},
+		{"private station, fresh reading", domain.Station{InstituteCode: domain.OperatorInstitute, OwnerID: &owner, Latest: fresh}, domain.ConfidenceMedium},
 		{"model point", domain.Station{InstituteCode: "openmeteo", Latest: fresh}, domain.ConfidenceLow},
 		{"official station, stale reading", domain.Station{InstituteCode: "inmet", Latest: stale}, domain.ConfidenceLow},
 		{"station without reading", domain.Station{InstituteCode: "inmet"}, ""},
