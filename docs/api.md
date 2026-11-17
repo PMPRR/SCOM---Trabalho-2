@@ -699,7 +699,7 @@ o que foi digitado (menos a senha); HTMX recebe o fragmento, por exemplo
 | 400 | `email` | Informe um e-mail válido. |
 | 400 | `senha` | A senha precisa ter no mínimo 8 caracteres. / A senha pode ter no máximo 72 caracteres. |
 | 400 | `senha-confirma` | As senhas não são iguais. |
-| 400 | `termos` | É preciso aceitar os termos de uso. |
+| 400 | `termos` | É preciso concordar que as estações cadastradas ficam públicas. |
 | 403 | — | Token CSRF ausente ou diferente |
 | 409 | — | Já existe uma conta com este e-mail. |
 | 429 | — | Muitas tentativas. Aguarde um minuto e tente de novo. (`Retry-After` em segundos) |
@@ -808,7 +808,7 @@ seguinte e se troca por ela.
       <h3>Campinas</h3>
       <p class="station-card-meta">Open-Meteo &middot; confiança baixa</p>
       <dl class="station-readings">
-        <dt>Temperatura</dt><dd>24.3 °C</dd>
+        <dt>Temperatura</dt><dd>24,3 °C</dd>
         <dt>Vento</dt><dd>11 km/h de sudeste</dd>
         <dt>Chuva (1 h)</dt><dd>sem dado</dd>
       </dl>
@@ -835,7 +835,7 @@ Cartão de uma estação ativa, mostrado no balão do mapa.
   <dl class="station-readings">
     <dt>Temperatura</dt><dd>sem dado</dd>
     <dt>Vento</dt><dd>sem dado</dd>
-    <dt>Chuva (1 h)</dt><dd>1.6 mm</dd>
+    <dt>Chuva (1 h)</dt><dd>1,6 mm</dd>
   </dl>
   <p class="station-card-meta">Atualizado em <time datetime="2026-11-17T07:40:00-03:00">17/11 às 07:40</time></p>
 </article>
