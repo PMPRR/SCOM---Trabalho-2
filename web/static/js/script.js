@@ -172,18 +172,60 @@
    esses casos com um fragmento de erro ja escapado; aqui ele e colocado no
    lugar do conteudo que nao veio. Sem resposta alguma (rede fora do ar), a
    mensagem e montada com textContent.
+
+   Dois ajustes:
+   - Um elemento com data-error-target="#id" (ou dentro de um) manda os
+     erros para aquele lugar, e nao para o alvo do pedido. Serve para as
+     linhas de uma tabela, onde um paragrafo de erro nao cabe.
+   - Se o erro diz de que campo se trata (data-field, o nome do campo), o
+     campo do formulario fica marcado com aria-invalid e recebe o foco.
    ========================================================================== */
 (function () {
   "use strict";
 
+  function destino(evento) {
+    const elemento = evento.detail.elt;
+    const desvio = elemento && elemento.closest && elemento.closest("[data-error-target]");
+    if (desvio) {
+      const lugar = document.querySelector(desvio.dataset.errorTarget);
+      if (lugar) return lugar;
+    }
+    return evento.detail.target;
+  }
+
+  function marcarCampo(alvo, elemento) {
+    const formulario = (elemento && elemento.closest && elemento.closest("form")) || alvo.closest("form");
+    if (!formulario) return;
+    formulario.querySelectorAll('[aria-invalid="true"]').forEach(function (campo) {
+      campo.removeAttribute("aria-invalid");
+    });
+    const erro = alvo.querySelector("[data-field]");
+    const campo = erro && formulario.elements.namedItem(erro.dataset.field);
+    if (campo && campo.focus) {
+      campo.setAttribute("aria-invalid", "true");
+      campo.focus();
+    }
+  }
+
   document.addEventListener("htmx:responseError", function (evento) {
-    const alvo = evento.detail.target;
+    const alvo = destino(evento);
     const resposta = evento.detail.xhr && evento.detail.xhr.responseText;
-    if (alvo && resposta) alvo.innerHTML = resposta;
+    if (!alvo || !resposta) return;
+    alvo.innerHTML = resposta;
+    marcarCampo(alvo, evento.detail.elt);
+  });
+
+  /* Um pedido que deu certo limpa o aviso de erro anterior da tabela. */
+  document.addEventListener("htmx:afterRequest", function (evento) {
+    if (!evento.detail.successful) return;
+    const elemento = evento.detail.elt;
+    const desvio = elemento && elemento.closest && elemento.closest("[data-error-target]");
+    const lugar = desvio && document.querySelector(desvio.dataset.errorTarget);
+    if (lugar) lugar.replaceChildren();
   });
 
   document.addEventListener("htmx:sendError", function (evento) {
-    const alvo = evento.detail.target;
+    const alvo = destino(evento);
     if (!alvo) return;
     const aviso = document.createElement("p");
     aviso.className = "request-error";

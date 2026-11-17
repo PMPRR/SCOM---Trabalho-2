@@ -1,0 +1,78 @@
+{{/* Fragmentos do painel de estacoes (/painel/estacoes), trocados pelo
+     HTMX. Recebem as views de internal/server/handler/station_manage.go. */}}
+
+{{define "panel_status"}}
+<p class="panel-status" id="panel-status" role="status"{{if .StatusOOB}} hx-swap-oob="true"{{end}}>{{.Status}}</p>
+{{end}}
+
+{{/* As linhas de uma pagina. Numa busca vem junto a linha de status, que
+     fica fora da tabela (hx-swap-oob). Ela vai dentro de um <template>: a
+     resposta e lida como corpo de tabela, onde um <p> solto faria o
+     navegador descartar as <tr> seguintes. A ultima linha busca a pagina
+     seguinte e e trocada por ela. */}}
+{{define "panel_rows"}}
+{{if .StatusOOB}}<template>{{template "panel_status" .}}</template>{{end}}
+{{range .Rows}}{{template "panel_row" .}}{{end}}
+{{if .Empty}}
+<tr>
+    <td class="panel-empty" colspan="5">
+        {{.Empty}}
+        <a href="/painel/estacoes/nova">Cadastrar uma estação</a>
+    </td>
+</tr>
+{{end}}
+{{if .MoreURL}}
+<tr class="panel-more">
+    <td colspan="5">
+        <a class="btn btn-secondary" href="{{.MorePage}}"
+            hx-get="{{.MoreURL}}"
+            hx-target="closest tr"
+            hx-swap="outerHTML">Carregar mais</a>
+    </td>
+</tr>
+{{end}}
+{{end}}
+
+{{/* Uma linha. Os botoes sao formularios de verdade (POST com o token
+     CSRF): funcionam sem JavaScript. Com HTMX, ativar troca a linha pela
+     versao nova e excluir pede confirmacao e remove a linha. */}}
+{{define "panel_row"}}
+<tr id="{{.DOMID}}"{{if not .Active}} class="is-inactive"{{end}}>
+    <td>
+        <span class="panel-name">{{.Name}}</span>
+        <span class="panel-code">{{.Code}}</span>
+    </td>
+    <td>{{.Institute}}</td>
+    <td>
+        {{if .Active}}<span class="panel-badge">Ativa</span>
+        {{else}}<span class="panel-badge panel-badge-off">Desativada</span>{{end}}
+    </td>
+    <td>{{.Reading}}</td>
+    <td>
+        <div class="panel-actions">
+            {{if not .Official}}
+            <a class="btn btn-secondary btn-small" href="{{.EditURL}}">Editar<span class="visually-hidden"> {{.Name}}</span></a>
+            {{end}}
+            <form method="post" action="{{.ActiveURL}}"
+                hx-post="{{.ActiveURL}}" hx-target="closest tr" hx-swap="outerHTML">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <input type="hidden" name="active" value="{{.NextActive}}">
+                <button class="btn btn-secondary btn-small" type="submit">{{.ToggleLabel}}<span class="visually-hidden"> {{.Name}}</span></button>
+            </form>
+            {{if not .Official}}
+            <!-- hx-params="none": o DELETE do HTMX levaria os campos do
+                formulario na URL, e o token CSRF ja vai no cabecalho. -->
+            <form method="post" action="{{.DeleteURL}}/excluir">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <button class="btn btn-danger btn-small" type="submit"
+                    hx-delete="{{.DeleteURL}}"
+                    hx-params="none"
+                    hx-confirm="Excluir a estação {{.Name}} e todas as leituras dela? Não é possível desfazer."
+                    hx-target="closest tr"
+                    hx-swap="outerHTML">Excluir<span class="visually-hidden"> {{.Name}}</span></button>
+            </form>
+            {{end}}
+        </div>
+    </td>
+</tr>
+{{end}}

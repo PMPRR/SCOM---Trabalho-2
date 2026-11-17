@@ -1,0 +1,116 @@
+{{define "title"}}{{.Data.Heading}} - ClimaSP{{end}}
+
+{{define "description"}}Cadastro de uma estação meteorológica no ClimaSP.{{end}}
+
+{{define "head_vendor"}}<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">{{end}}
+
+{{define "head_page"}}
+<link rel="stylesheet" href="/static/css/auth.css">
+<link rel="stylesheet" href="/static/css/panel.css">
+<script src="/static/vendor/leaflet/leaflet.js" defer></script>
+<script src="/static/data/sp-geo.js" defer></script>
+<script src="/static/data/sp-municipios.js" defer></script>
+<script src="/static/js/campo.js" defer></script>
+<script src="/static/js/station-form.js" defer></script>
+{{end}}
+
+{{define "content"}}
+<main id="content">
+    <div class="account panel">
+        <p class="panel-back"><a href="/painel/estacoes">Voltar para as estações</a></p>
+        <h1>{{.Data.Heading}}</h1>
+
+        {{if .Data.Official}}
+        <!-- Estacao coletada de um instituto: nada aqui e editavel. -->
+        <section class="account-card" aria-labelledby="oficial-heading">
+            <h2 id="oficial-heading">{{.Data.Name}}</h2>
+            <p>
+                Esta estação é coletada de {{.Data.Institute}}. O nome, o código e a
+                posição vêm da fonte e são atualizados a cada coleta, então não
+                podem ser alterados aqui.
+            </p>
+            <p>Situação: <strong>{{if .Data.Active}}ativa{{else}}desativada{{end}}</strong>.</p>
+            <form class="account-actions" method="post" action="{{.Data.ActiveURL}}">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <input type="hidden" name="active" value="{{.Data.NextActive}}">
+                <button class="btn btn-secondary" type="submit">{{.Data.ToggleLabel}}</button>
+            </form>
+        </section>
+        {{else}}
+        <div class="station-form-layout">
+            <!-- Com HTMX o formulario vai por hx-post (nova) ou hx-put
+                (edicao); um erro aparece na area de aviso e o servidor manda
+                redirecionar quando da certo. Sem JavaScript, o envio comum
+                (POST) devolve a pagina inteira com o erro. -->
+            <form class="auth-card auth-form station-form" method="post" action="{{.Data.Action}}"
+                {{if .Data.New}}hx-post="{{.Data.Action}}"{{else}}hx-put="{{.Data.Action}}"{{end}}
+                hx-target="#form-aviso" hx-swap="innerHTML">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+
+                <div class="auth-aviso" id="form-aviso" role="alert">{{if .FormError}}<p class="request-error">{{.FormError}}</p>{{end}}</div>
+
+                <div class="field">
+                    <label class="field-label" for="name">Nome</label>
+                    <input class="field-input" type="text" id="name" name="name"
+                        value="{{index .Form "name"}}" maxlength="120" required
+                        {{if eq .FormField "name"}}aria-invalid="true" autofocus{{end}}>
+                </div>
+
+                <div class="field">
+                    <label class="field-label" for="external_code">Código</label>
+                    <input class="field-input" type="text" id="external_code" name="external_code"
+                        value="{{index .Form "external_code"}}" maxlength="50" required
+                        pattern="[A-Za-z0-9][A-Za-z0-9._\-]{0,49}" spellcheck="false"
+                        aria-describedby="external_code-hint"
+                        {{if eq .FormField "external_code"}}aria-invalid="true" autofocus{{end}}>
+                    <p class="field-hint" id="external_code-hint">Como você identifica a estação, por exemplo <code>sitio-01</code>. Letras sem acento, números, ponto, hífen ou sublinhado.</p>
+                </div>
+
+                <fieldset class="station-form-position">
+                    <legend class="field-label">Posição</legend>
+                    <p class="field-hint" id="posicao-hint">Clique no mapa ao lado para preencher, ou digite. Use vírgula ou ponto nos decimais.</p>
+                    <div class="station-form-coords">
+                        <div class="field">
+                            <label class="field-label" for="lat">Latitude</label>
+                            <input class="field-input" type="text" inputmode="decimal" id="lat" name="lat"
+                                value="{{index .Form "lat"}}" placeholder="-23,55" required
+                                aria-describedby="posicao-hint"
+                                {{if eq .FormField "lat"}}aria-invalid="true" autofocus{{end}}>
+                        </div>
+                        <div class="field">
+                            <label class="field-label" for="lon">Longitude</label>
+                            <input class="field-input" type="text" inputmode="decimal" id="lon" name="lon"
+                                value="{{index .Form "lon"}}" placeholder="-46,63" required
+                                aria-describedby="posicao-hint"
+                                {{if eq .FormField "lon"}}aria-invalid="true" autofocus{{end}}>
+                        </div>
+                    </div>
+                    <p class="field-hint" id="municipio" role="status"></p>
+                </fieldset>
+
+                <div class="field">
+                    <label class="field-label" for="altitude_m">Altitude em metros <span class="field-opcional">(opcional)</span></label>
+                    <input class="field-input" type="text" inputmode="decimal" id="altitude_m" name="altitude_m"
+                        value="{{index .Form "altitude_m"}}" placeholder="760"
+                        {{if eq .FormField "altitude_m"}}aria-invalid="true" autofocus{{end}}>
+                </div>
+
+                <div class="field-check">
+                    <input type="checkbox" id="active" name="active"{{if index .Form "active"}} checked{{end}}>
+                    <label for="active">Ativa: aparece no mapa e na lista pública</label>
+                </div>
+
+                <div class="panel-actions">
+                    <button class="btn btn-primary" type="submit">{{if .Data.New}}Cadastrar estação{{else}}Salvar alterações{{end}}</button>
+                    <a class="btn btn-secondary" href="/painel/estacoes">Cancelar</a>
+                </div>
+            </form>
+
+            <!-- Mapa para escolher a posicao. E um atalho: tudo o que ele faz
+                tambem da para fazer digitando nos campos acima. -->
+            <div class="station-form-map" id="form-mapa" aria-hidden="true"></div>
+        </div>
+        {{end}}
+    </div>
+</main>
+{{end}}

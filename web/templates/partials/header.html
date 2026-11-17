@@ -37,6 +37,7 @@
             <ul class="site-account-menu" id="account-menu" role="list" hidden>
                 {{if .User}}
                 <li><a href="/conta">Minha conta</a></li>
+                <li><a href="/painel/estacoes">{{if .User.IsAdmin}}Estações{{else}}Minhas estações{{end}}</a></li>
                 {{if .User.IsAdmin}}
                 <li><a href="/admin/usuarios">Usuários</a></li>
                 {{end}}

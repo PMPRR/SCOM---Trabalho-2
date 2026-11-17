@@ -1,0 +1,74 @@
+{{define "title"}}{{.Data.Heading}} - ClimaSP{{end}}
+
+{{define "description"}}Cadastro e gerenciamento das estações meteorológicas no ClimaSP.{{end}}
+
+{{define "head_page"}}
+<link rel="stylesheet" href="/static/css/auth.css">
+<link rel="stylesheet" href="/static/css/panel.css">
+{{end}}
+
+{{define "content"}}
+<main id="content">
+    <div class="account panel">
+        <div class="panel-head">
+            <h1>{{.Data.Heading}}</h1>
+            <a class="btn btn-primary" href="/painel/estacoes/nova">Nova estação</a>
+        </div>
+
+        <p class="panel-lede">
+            {{if .Data.IsAdmin}}
+            Todas as estações do sistema. As cadastradas no site podem ser
+            editadas e excluídas; as coletadas de um instituto só podem ser
+            desativadas, porque os dados delas vêm da fonte.
+            {{else}}
+            As estações que você cadastrou. Uma estação desativada continua
+            aqui, mas sai do mapa e da lista pública.
+            {{end}}
+        </p>
+
+        {{if .Data.Notice}}
+        <p class="panel-notice" role="status">{{.Data.Notice}}</p>
+        {{end}}
+
+        <!-- A busca filtra enquanto se digita (HTMX troca so as linhas da
+            tabela); sem JavaScript, o botao envia o formulario e a pagina
+            volta inteira, ja filtrada. -->
+        <form class="panel-search" role="search" action="/painel/estacoes" method="get"
+            hx-get="/painel/estacoes/linhas"
+            hx-trigger="input changed delay:300ms from:#panel-q, submit"
+            hx-target="#panel-rows"
+            hx-swap="innerHTML">
+            <label class="field-label" for="panel-q">Buscar por nome ou código</label>
+            <div class="field-group">
+                <input class="field-input" type="search" id="panel-q" name="q"
+                    value="{{.Data.Search}}" maxlength="120" autocomplete="off">
+                <button class="btn btn-secondary" type="submit">Buscar</button>
+            </div>
+        </form>
+
+        <!-- Erros das acoes de uma linha (ativar, excluir) aparecem aqui, e
+            nao dentro da linha, que e uma <tr> e nao aceita paragrafos.
+            Ver data-error-target em script.js. -->
+        <div class="auth-aviso" id="panel-aviso" role="alert"></div>
+
+        {{template "panel_status" .Data.Rows}}
+
+        <div class="table-scroll">
+            <table class="users-table panel-table" data-error-target="#panel-aviso">
+                <thead>
+                    <tr>
+                        <th scope="col">Estação</th>
+                        <th scope="col">Origem</th>
+                        <th scope="col">Situação</th>
+                        <th scope="col">Última leitura</th>
+                        <th scope="col"><span class="visually-hidden">Ações</span></th>
+                    </tr>
+                </thead>
+                <tbody id="panel-rows">
+                    {{template "panel_rows" .Data.Rows}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+{{end}}

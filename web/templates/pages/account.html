@@ -24,11 +24,12 @@
                 <dd>{{.Data.Since}}</dd>
             </dl>
 
-            {{if .Data.IsAdmin}}
             <p class="account-actions">
+                <a class="btn btn-primary" href="/painel/estacoes">{{if .Data.IsAdmin}}Gerenciar estações{{else}}Minhas estações{{end}}</a>
+                {{if .Data.IsAdmin}}
                 <a class="btn btn-secondary" href="/admin/usuarios">Ver usuários cadastrados</a>
+                {{end}}
             </p>
-            {{end}}
         </section>
     </div>
 </main>

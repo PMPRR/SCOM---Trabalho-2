@@ -1,0 +1,204 @@
+/* ==========================================================================
+   panel.css — painel de estacoes (stations_panel.html e station_form.html)
+   Depende de themes.css, style.css e auth.css (.account, .field-*,
+   .users-table, .auth-aviso). Carregar depois deles.
+   ========================================================================== */
+
+.panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-4);
+}
+
+.panel-lede {
+    max-inline-size: var(--measure);
+    margin-block-start: var(--sp-3);
+    color: var(--c-muted);
+}
+
+.panel-back {
+    margin-block-end: var(--sp-3);
+    font-size: var(--fs-sm);
+}
+
+/* Confirmacao depois de cadastrar, alterar ou excluir. */
+.panel-notice {
+    margin-block-start: var(--sp-4);
+    padding: var(--sp-3) var(--sp-4);
+    border-inline-start: 3px solid var(--c-accent);
+    border-radius: var(--radius);
+    background-color: var(--c-surface);
+}
+
+.panel-search {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    max-inline-size: 36rem;
+    margin-block-start: var(--sp-5);
+}
+
+.panel-search .field-group {
+    gap: var(--sp-2);
+}
+
+.panel .auth-aviso {
+    margin-block-start: var(--sp-4);
+}
+
+.panel-status {
+    margin-block-start: var(--sp-4);
+    color: var(--c-muted);
+}
+
+.panel-table td {
+    vertical-align: middle;
+}
+
+.panel-name {
+    display: block;
+    font-weight: 600;
+}
+
+.panel-code {
+    display: block;
+    color: var(--c-muted);
+    font-family: var(--font-num);
+    font-size: var(--fs-sm);
+    overflow-wrap: anywhere;
+}
+
+.panel-table tr.is-inactive .panel-name {
+    color: var(--c-muted);
+}
+
+.panel-badge {
+    display: inline-block;
+    padding: 0 var(--sp-2);
+    border: 1px solid var(--c-accent);
+    border-radius: var(--radius-pill);
+    color: var(--c-accent);
+    font-size: var(--fs-sm);
+    white-space: nowrap;
+}
+
+.panel-badge-off {
+    border-color: var(--c-line);
+    color: var(--c-muted);
+}
+
+.panel-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--sp-2);
+}
+
+.panel-actions form {
+    margin: 0;
+}
+
+.panel-empty,
+.panel-more td {
+    padding-block: var(--sp-5);
+    color: var(--c-muted);
+}
+
+/* Botao menor para as acoes de cada linha. Continua com 2.25rem de altura,
+   o minimo confortavel para toque numa tabela densa. */
+.btn-small {
+    min-height: 2.25rem;
+    padding: var(--sp-1) var(--sp-4);
+    font-size: var(--fs-sm);
+    white-space: nowrap;
+}
+
+.btn-danger {
+    border-color: var(--c-alert);
+    color: var(--c-alert);
+    background-color: transparent;
+}
+
+.btn-danger:hover {
+    background-color: var(--c-alert);
+    color: var(--c-bg);
+}
+
+/* Linha removida pelo HTMX: some aos poucos, em vez de saltar. */
+.panel-table tr.htmx-swapping {
+    opacity: 0;
+    transition: opacity 300ms ease;
+}
+
+/* ==========================================================================
+   Formulario da estacao
+   ========================================================================== */
+
+.station-form-layout {
+    display: grid;
+    gap: var(--sp-5);
+    margin-block-start: var(--sp-5);
+}
+
+@media (min-width: 64em) {
+    .station-form-layout {
+        grid-template-columns: minmax(0, 30rem) minmax(0, 1fr);
+        align-items: start;
+    }
+}
+
+.station-form {
+    margin-block-start: 0;
+}
+
+.station-form-position {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.station-form-coords {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-3);
+}
+
+.field-input[aria-invalid="true"] {
+    border-color: var(--c-alert);
+}
+
+.station-form-map {
+    min-block-size: 24rem;
+    border: 1px solid var(--c-line);
+    border-radius: var(--radius);
+    background-color: var(--c-bg);
+}
+
+/* Sem o script do mapa, a area fica vazia: some. */
+.station-form-map:not(.leaflet-container) {
+    display: none;
+}
+
+@media (min-width: 64em) {
+    .station-form-map {
+        position: sticky;
+        top: calc(var(--header-h) + var(--sp-4));
+        min-block-size: 32rem;
+    }
+}
+
+/* Credito da malha nas cores do tema, como no mapa principal (map.css). */
+.station-form-map .leaflet-control-attribution {
+    background-color: var(--c-surface);
+    color: var(--c-muted);
+    font-size: var(--fs-sm);
+}
+
+.station-form-map .leaflet-control-attribution a {
+    color: var(--c-accent);
+}

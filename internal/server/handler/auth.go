@@ -126,35 +126,16 @@ func (h *AuthHandler) Users(w http.ResponseWriter, r *http.Request) {
 	h.render.HTML(w, r, http.StatusOK, "users", data)
 }
 
-// formFailed answers a refused form. HTMX gets the error as a fragment, put
-// in the form's notice area; a plain form post gets the whole page again,
-// with the message and what had been typed. The status code is the same.
+// formFailed answers a refused form; see showFormError.
 func (h *AuthHandler) formFailed(w http.ResponseWriter, r *http.Request, page string, err error, typed map[string]string) {
-	if r.Header.Get("HX-Request") == "true" {
-		h.render.Fail(w, r, err)
-		return
-	}
-	status, _, message, _ := h.render.Describe(err)
-	if status == http.StatusInternalServerError {
-		h.render.Fail(w, r, err)
-		return
-	}
 	data := newPageData(r, "")
-	data.FormError = message
 	data.Form = typed
-	h.render.HTML(w, r, status, page, data)
+	showFormError(h.render, w, r, page, data, err)
 }
 
-// redirect sends the browser to another page after a successful form. HTMX
-// follows the HX-Redirect header with a full page load; a plain form post
-// gets 303, which makes the browser fetch the target with GET.
+// redirect sends the browser on after a successful form; see redirectTo.
 func (h *AuthHandler) redirect(w http.ResponseWriter, r *http.Request, target string) {
-	if r.Header.Get("HX-Request") == "true" {
-		w.Header().Set("HX-Redirect", target)
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	http.Redirect(w, r, target, http.StatusSeeOther)
+	redirectTo(w, r, target)
 }
 
 func (h *AuthHandler) redirectIfLoggedIn(w http.ResponseWriter, r *http.Request) bool {

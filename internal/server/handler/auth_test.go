@@ -88,10 +88,11 @@ func (m *memSessions) DeleteExpired(context.Context, time.Time) error { return n
 
 // site is the application running on a test server, plus a browser.
 type site struct {
-	t      *testing.T
-	url    string
-	users  *memUsers
-	client *http.Client
+	t        *testing.T
+	url      string
+	users    *memUsers
+	stations *fakeRepo
+	client   *http.Client
 }
 
 func newSite(t *testing.T) *site {
@@ -112,6 +113,9 @@ func newSite(t *testing.T) *site {
 	auth := NewAuthHandler(authService, rd, false)
 	pages := NewPageHandler(rd)
 	throttled := middleware.RateLimit(security.NewRateLimiter(10, time.Minute), rd)
+	repo := &fakeRepo{}
+	stations := NewStationHandler(service.NewStationService(repo, log), rd)
+	loggedIn := middleware.RequireAuth(rd)
 
 	// The same routes and the same middleware order as server.NewRouter.
 	mux := http.NewServeMux()
@@ -123,6 +127,22 @@ func newSite(t *testing.T) *site {
 	mux.HandleFunc("POST /sair", auth.Logout)
 	mux.Handle("GET /conta", middleware.RequireAuth(rd)(http.HandlerFunc(auth.Account)))
 	mux.Handle("GET /admin/usuarios", middleware.RequireRole(domain.RoleAdmin, rd)(http.HandlerFunc(auth.Users)))
+	mux.Handle("GET /painel/estacoes", loggedIn(http.HandlerFunc(stations.Panel)))
+	mux.Handle("GET /painel/estacoes/linhas", loggedIn(http.HandlerFunc(stations.PanelRows)))
+	mux.Handle("GET /painel/estacoes/nova", loggedIn(http.HandlerFunc(stations.NewStationForm)))
+	mux.Handle("POST /painel/estacoes", loggedIn(http.HandlerFunc(stations.CreateFromForm)))
+	mux.Handle("GET /painel/estacoes/{id}/editar", loggedIn(http.HandlerFunc(stations.EditStationForm)))
+	mux.Handle("PUT /painel/estacoes/{id}", loggedIn(http.HandlerFunc(stations.UpdateFromForm)))
+	mux.Handle("POST /painel/estacoes/{id}", loggedIn(http.HandlerFunc(stations.UpdateFromForm)))
+	mux.Handle("POST /painel/estacoes/{id}/ativa", loggedIn(http.HandlerFunc(stations.SetActiveFromForm)))
+	mux.Handle("DELETE /painel/estacoes/{id}", loggedIn(http.HandlerFunc(stations.DeleteFromForm)))
+	mux.Handle("POST /painel/estacoes/{id}/excluir", loggedIn(http.HandlerFunc(stations.DeleteFromForm)))
+	mux.HandleFunc("GET /api/stations", stations.List)
+	mux.HandleFunc("GET /api/stations/{id}", stations.Get)
+	mux.Handle("POST /api/stations", loggedIn(http.HandlerFunc(stations.Create)))
+	mux.Handle("PUT /api/stations/{id}", loggedIn(http.HandlerFunc(stations.Update)))
+	mux.Handle("PATCH /api/stations/{id}", loggedIn(http.HandlerFunc(stations.Patch)))
+	mux.Handle("DELETE /api/stations/{id}", loggedIn(http.HandlerFunc(stations.Delete)))
 
 	var root http.Handler = mux
 	root = middleware.LoadUser(authService, rd)(root)
@@ -130,7 +150,7 @@ func newSite(t *testing.T) *site {
 
 	srv := httptest.NewServer(root)
 	t.Cleanup(srv.Close)
-	return &site{t: t, url: srv.URL, users: users, client: newBrowser(t)}
+	return &site{t: t, url: srv.URL, users: users, stations: repo, client: newBrowser(t)}
 }
 
 // newBrowser keeps cookies between requests and does not follow redirects,

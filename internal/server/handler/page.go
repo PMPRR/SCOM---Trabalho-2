@@ -18,8 +18,11 @@ type PageData struct {
 	// CSRFToken goes into the hidden field of every form and into the
 	// header HTMX sends (see middleware.CSRF).
 	CSRFToken string
-	// FormError is the message shown above a form that was refused.
+	// FormError is the message shown above a form that was refused, and
+	// FormField the input it is about (empty when it is about the whole
+	// form). The page marks that input aria-invalid and puts the focus there.
 	FormError string
+	FormField string
 	// Form carries what the user had typed, so a refused form comes back
 	// filled in. It never carries passwords.
 	Form map[string]string

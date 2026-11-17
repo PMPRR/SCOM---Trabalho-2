@@ -87,6 +87,21 @@ func NewRouter(log *slog.Logger, db *pgxpool.Pool, dev bool) (http.Handler, erro
 	mux.Handle("GET /conta", loggedIn(http.HandlerFunc(auth.Account)))
 	mux.Handle("GET /admin/usuarios", adminOnly(http.HandlerFunc(auth.Users)))
 
+	// Station panel: registering and managing stations. Logged-in users
+	// only; which stations each one may change is a rule of the service.
+	// The plain POST routes are the same forms without JavaScript.
+	panel := func(h http.HandlerFunc) http.Handler { return loggedIn(h) }
+	mux.Handle("GET /painel/estacoes", panel(stations.Panel))
+	mux.Handle("GET /painel/estacoes/linhas", panel(stations.PanelRows))
+	mux.Handle("GET /painel/estacoes/nova", panel(stations.NewStationForm))
+	mux.Handle("POST /painel/estacoes", panel(stations.CreateFromForm))
+	mux.Handle("GET /painel/estacoes/{id}/editar", panel(stations.EditStationForm))
+	mux.Handle("PUT /painel/estacoes/{id}", panel(stations.UpdateFromForm))
+	mux.Handle("POST /painel/estacoes/{id}", panel(stations.UpdateFromForm))
+	mux.Handle("POST /painel/estacoes/{id}/ativa", panel(stations.SetActiveFromForm))
+	mux.Handle("DELETE /painel/estacoes/{id}", panel(stations.DeleteFromForm))
+	mux.Handle("POST /painel/estacoes/{id}/excluir", panel(stations.DeleteFromForm))
+
 	// Fragments (HTML swapped into a page by HTMX)
 	mux.HandleFunc("GET /estacoes", stations.Cards)
 	mux.HandleFunc("GET /estacoes/{id}", stations.Card)
