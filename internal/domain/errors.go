@@ -1,6 +1,9 @@
 package domain
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // ErrNotFound is returned when the requested entity does not exist.
 var ErrNotFound = errors.New("not found")
@@ -29,7 +32,29 @@ var (
 	// ErrStationCodeTaken means another station registered on the site
 	// already uses the code.
 	ErrStationCodeTaken = errors.New("station code already registered")
+	// ErrKeyTaken means another station already uses the public key.
+	ErrKeyTaken = errors.New("public key already registered")
 )
+
+// Errors of readings sent by the stations themselves.
+var (
+	// ErrInvalidSignature means the submission is not signed by the key of
+	// the station: missing, malformed or wrong signature.
+	ErrInvalidSignature = errors.New("invalid signature")
+	// ErrUplinkDisabled means the station has no key and accepts no
+	// submissions.
+	ErrUplinkDisabled = errors.New("station does not send readings")
+)
+
+// TooSoonError means a station sent a reading before its interval was over.
+// Wait is how long until the next submission is accepted.
+type TooSoonError struct {
+	Wait time.Duration
+}
+
+func (e *TooSoonError) Error() string {
+	return "submission before the interval: wait " + e.Wait.String()
+}
 
 // ValidationError reports an input that breaks a business rule. Message is
 // written for the end user.

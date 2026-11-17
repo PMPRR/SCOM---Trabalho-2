@@ -44,7 +44,28 @@ type Station struct {
 	UpdatedAt     time.Time    `json:"updated_at"`
 	Latest        *Observation `json:"latest"`
 	Confidence    Confidence   `json:"confidence"`
+
+	// Uplink: a private station may send its own readings, signed with an
+	// Ed25519 key. PublicKey is the OpenSSH line of the public half (it is
+	// public by nature); empty means the station does not send.
+	PublicKey       string     `json:"public_key,omitempty"`
+	KeyFingerprint  string     `json:"key_fingerprint,omitempty"`
+	ReportIntervalS *int32     `json:"report_interval_s"`
+	LastReportAt    *time.Time `json:"last_report_at"`
+	// UplinkStatus is derived by the service: "waiting" before the first
+	// submission, "ok" while they arrive on time, "late" after two missed
+	// intervals; empty for a station without a key.
+	UplinkStatus UplinkStatus `json:"uplink_status,omitempty"`
 }
+
+// UplinkStatus says whether a station that sends its own readings is doing so.
+type UplinkStatus string
+
+const (
+	UplinkWaiting UplinkStatus = "waiting"
+	UplinkOK      UplinkStatus = "ok"
+	UplinkLate    UplinkStatus = "late"
+)
 
 // OperatorInstitute is the institutes.code of the stations registered by
 // hand on the site. Their owner is the user who registered them.
@@ -58,13 +79,26 @@ func (s Station) IsOfficial() bool {
 }
 
 // StationInput is what a user sends to register a station or change one.
+// PublicKey and ReportIntervalS go together: both set, the station may send
+// its readings; both empty, it does not. KeyFingerprint is filled in by the
+// service from the key.
 type StationInput struct {
-	ExternalCode string
-	Name         string
-	Lat          float64
-	Lon          float64
-	AltitudeM    *float32
-	Active       bool
+	ExternalCode    string
+	Name            string
+	Lat             float64
+	Lon             float64
+	AltitudeM       *float32
+	Active          bool
+	PublicKey       string
+	ReportIntervalS int32
+	KeyFingerprint  string
+}
+
+// SubmissionResult is what happened to a reading sent by a station.
+type SubmissionResult struct {
+	Stored     bool      // false: a reading with the same time was already stored
+	ObservedAt time.Time // the time the reading was stored under
+	NextAfter  time.Time // the earliest time the next submission is accepted
 }
 
 // StationFilter narrows a listing of stations. The zero value lists all.
