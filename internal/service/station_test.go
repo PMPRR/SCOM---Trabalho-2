@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/PMPRR/SCOM---Trabalho-2/internal/domain"
 )
@@ -115,3 +116,46 @@ func TestGetRejectsNonPositiveID(t *testing.T) {
 		}
 	}
 }
+
+func TestConfidenceRanksSourcesAndAge(t *testing.T) {
+	now := time.Date(2026, 11, 16, 22, 0, 0, 0, time.UTC)
+	owner := int64(7)
+	fresh := &domain.Observation{ObservedAt: now.Add(-30 * time.Minute)}
+	stale := &domain.Observation{ObservedAt: now.Add(-3 * time.Hour)}
+
+	cases := []struct {
+		name    string
+		station domain.Station
+		want    domain.Confidence
+	}{
+		{"official station, fresh reading", domain.Station{InstituteCode: "inmet", Latest: fresh}, domain.ConfidenceHigh},
+		{"private station, fresh reading", domain.Station{InstituteCode: "privada", OwnerID: &owner, Latest: fresh}, domain.ConfidenceMedium},
+		{"model point", domain.Station{InstituteCode: "openmeteo", Latest: fresh}, domain.ConfidenceLow},
+		{"official station, stale reading", domain.Station{InstituteCode: "inmet", Latest: stale}, domain.ConfidenceLow},
+		{"station without reading", domain.Station{InstituteCode: "inmet"}, ""},
+	}
+	for _, c := range cases {
+		if got := confidenceOf(c.station, now); got != c.want {
+			t.Errorf("%s: confidence = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestListAndGetFillConfidence(t *testing.T) {
+	now := time.Date(2026, 11, 16, 22, 0, 0, 0, time.UTC)
+	repo := &fakeRepo{stations: []domain.Station{
+		{ID: 1, InstituteCode: "inmet", Latest: &domain.Observation{ObservedAt: now.Add(-time.Hour)}},
+	}}
+	svc := NewStationService(repo)
+	svc.now = func() time.Time { return now }
+
+	stations, _, err := svc.List(context.Background(), 10, 0)
+	if err != nil || stations[0].Confidence != domain.ConfidenceHigh {
+		t.Errorf("List: confidence = %q, err = %v", stations[0].Confidence, err)
+	}
+	station, err := svc.Get(context.Background(), 1)
+	if err != nil || station.Confidence != domain.ConfidenceHigh {
+		t.Errorf("Get: confidence = %q, err = %v", station.Confidence, err)
+	}
+}
+
