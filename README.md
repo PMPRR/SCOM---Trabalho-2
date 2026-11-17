@@ -56,6 +56,8 @@ handler ──► service ──► repository ──► domain
 │       ├── render/               Templates, JSON e tratamento de erros
 │       └── middleware/           Log, recuperação de panic, sessão, perfil, CSRF e limite
 ├── migrations/                   Migrações goose (SQL)
+├── tools/
+│   └── build-relevo.py           Gera relevo-sp.js a partir do SRTM30
 ├── db/
 │   ├── schema.sql                Script de criação, gerado por `make schema`
 │   └── seed_dev.sql              Estações simuladas para desenvolvimento
@@ -114,16 +116,26 @@ Alternativa sem goose: executar `db/schema.sql` diretamente no banco.
 
 ### 3. Dados do mapa
 
-Dois arquivos de malha já estão versionados em `web/static/data/`:
+Os três arquivos de dados do mapa já estão versionados em `web/static/data/`:
 
-| Arquivo | Conteúdo |
-|---|---|
-| `sp-geo.js` | Contorno do Estado (obrigatório para o mapa abrir) |
-| `sp-municipios.js` | Divisas dos 645 municípios e o seletor de município |
+| Arquivo | Conteúdo | Fonte |
+|---|---|---|
+| `sp-geo.js` | Contorno do Estado (obrigatório para o mapa abrir) | IBGE |
+| `sp-municipios.js` | Divisas dos 645 municípios e o seletor de município | IBGE |
+| `relevo-sp.js` | Faixas altimétricas e curvas de nível, de 200 em 200 m | SRTM30 (NASA/USGS) |
 
-O terceiro, `relevo-sp.js` (faixas altimétricas e curvas de nível), é opcional
-e não está no repositório: é gerado pelo `tools/build-sp-geo.py` do Trabalho I.
-Sem ele o mapa funciona e as duas caixas de relevo ficam desabilitadas.
+O relevo é gerado por `tools/build-relevo.py` a partir do SRTM30 v2.1
+(30 segundos de arco, cerca de 900 m), recortado pelo mesmo contorno de
+`sp-geo.js`. Para gerar de novo:
+
+```sh
+pip install numpy contourpy shapely
+python3 tools/build-relevo.py
+```
+
+Cada célula do SRTM30 é a média de quase 1 km², então os picos aparecem
+abaixo da altitude do cume: a Pedra da Mina (2798 m) sai com cerca de 2570 m.
+Sem o arquivo, o mapa funciona e as duas caixas de relevo ficam desabilitadas.
 
 ### 4. Estações
 
@@ -298,7 +310,8 @@ Toda leitura é validada antes de ser gravada: posição dentro do Estado, data
 recente e valores fisicamente possíveis.
 
 Créditos exigidos pelas fontes: Dados da Rede Observacional do CEMADEN/MCTIC;
-Open-Meteo (CC BY 4.0). Eles aparecem na página do mapa.
+Open-Meteo (CC BY 4.0); malhas do IBGE; altimetria SRTM30 (NASA/USGS, domínio
+público). Eles aparecem na página do mapa.
 
 ## Comandos do Makefile
 

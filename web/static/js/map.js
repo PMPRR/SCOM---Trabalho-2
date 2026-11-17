@@ -324,9 +324,17 @@
         camadaCurvas.addLayer(curva);
       });
 
-      mapa.attributionControl.addAttribution(
-        'Altimetria: <a href="http://www.dsr.inpe.br/topodata/">TOPODATA/INPE</a>'
-      );
+      /* O credito vem do proprio arquivo de dados, que sabe de que modelo de
+         elevacao foi gerado. Montado com textContent: nada do arquivo vira
+         HTML. Arquivos antigos, sem o campo, eram do TOPODATA. */
+      const fonte = window.SP_RELEVO.fonte || {
+        nome: "TOPODATA/INPE",
+        url: "http://www.dsr.inpe.br/topodata/",
+      };
+      const linkFonte = document.createElement("a");
+      linkFonte.href = fonte.url;
+      linkFonte.textContent = fonte.nome;
+      mapa.attributionControl.addAttribution("Altimetria: " + linkFonte.outerHTML);
     }
 
     /* A escala sai dos niveis que sobraram no arquivo, e nao de uma lista fixa:
