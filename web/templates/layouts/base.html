@@ -1,0 +1,21 @@
+{{define "base"}}<!DOCTYPE html>
+<html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>{{block "title" .}}ClimaSP{{end}}</title>
+        <meta name="description" content="{{block "description" .}}Agregador de dados meteorológicos do Estado de São Paulo.{{end}}">
+        {{block "head_vendor" .}}{{end}}
+        <link rel="stylesheet" href="/static/css/themes.css">
+        <link rel="stylesheet" href="/static/css/style.css">
+        <script src="/static/vendor/htmx.min.js" defer></script>
+        <script src="/static/js/script.js" defer></script>
+        {{block "head_page" .}}{{end}}
+    </head>
+    <body>
+{{template "header" .}}
+{{block "content" .}}{{end}}
+{{template "footer" .}}
+    </body>
+</html>
+{{end}}

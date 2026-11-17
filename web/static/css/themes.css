@@ -1,0 +1,151 @@
+/* ===================================================
+        theme.css
+-----------------------------------------------------
+This pallete was created based on the Kanagawa theme (rebelot/kanagawa.nvim):
+ - Lotus (light theme)
+ - Wave (dark theme)
+
+ This theme was created utilizing Claude IA.
+=================================================== */
+
+/* --- Wave: dark theme (default) --- */
+:root,
+:root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --c-bg:      #1F1F28; /* sumiInk3 */
+    --c-surface: #2A2A37; /* sumiInk4 */
+    --c-line:    #54546D; /* sumiInk6 */
+ 
+    --c-fg:      #DCD7BA; /* fujiWhite      — 10.96:1 sobre bg | 9.74:1 sobre surface */
+    --c-muted:   #C8C093; /* oldWhite       —  8.65:1 sobre bg | 7.69:1 sobre surface */
+    --c-accent:  #7E9CD8; /* crystalBlue    —  5.78:1 sobre bg | 5.14:1 sobre surface */
+    --c-warn:    #E6C384; /* carpYellow     —  9.47:1 sobre bg | 8.42:1 sobre surface */
+    --c-alert:   #EB7986; /* waveRed   (*)  —  5.77:1 sobre bg | 5.12:1 sobre surface */
+
+    --c-on-accent: #1F1F28;
+
+    /* Rampa altimetrica (200 m por faixa). Fora dos seis tons da interface de
+    proposito: aqui a cor e dado, nao decoracao. */
+    --relevo-0:  #2A2A37;  /* 0-200 m, igual a superficie */
+    --relevo-1:  #3F5E4A;  --relevo-2:  #4F7050;  --relevo-3:  #648457;
+    --relevo-4:  #7E9A5E;  --relevo-5:  #98BB6C;  --relevo-6:  #B4B06B;
+    --relevo-7:  #C0A36E;  --relevo-8:  #DCA561;  --relevo-9:  #E08C5E;
+    --relevo-10: #FFA066;  --relevo-11: #E6879A;  --relevo-12: #D27E99;
+    --relevo-13: #C8BFA8;  --relevo-14: #DCD7BA;
+
+    /* Rampa termica (2 C por faixa, de 10 a 34 C). Escala fixa: a mesma cor
+    significa a mesma temperatura em qualquer captura. --temp-0 e "abaixo de
+    12 C" e --temp-12 e "acima de 34 C". */
+    --temp-0:  #4C6A93;  --temp-1:  #5F82B5;  --temp-2:  #7E9CD8;
+    --temp-3:  #7FB4CA;  --temp-4:  #7AA89F;  --temp-5:  #8CAE86;
+    --temp-6:  #98BB6C;  --temp-7:  #BFBB70;  --temp-8:  #E6C384;
+    --temp-9:  #F2A96E;  --temp-10: #FFA066;  --temp-11: #E46876;
+    --temp-12: #C34043;
+
+    /* Rampa de chuva (mm na ultima hora). Escala fixa, com limiares em 0,2,
+    1, 2,5, 5, 10, 25 e 50 mm. --chuva-1 e "0,2 a 1 mm" e --chuva-7 e "acima
+    de 50 mm"; nao ha --chuva-0, porque a faixa sem chuva nao e pintada. */
+    --chuva-1: #4C6A93;  --chuva-2: #5F82B5;  --chuva-3: #7E9CD8;
+    --chuva-4: #957FB8;  --chuva-5: #D27E99;  --chuva-6: #E46876;
+    --chuva-7: #FF5D62;
+
+    /* Escala de vento (km/h), fixa como a Beaufort. Seis faixas: calmaria,
+    brisa leve, moderado, forte, muito forte, vendaval. */
+    --vento-0: #717187;  --vento-1: #7E9CD8;  --vento-2: #7FB4CA;
+    --vento-3: #E6C384;  --vento-4: #FFA066;  --vento-5: #E46876;
+
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+ 
+    --c-bg:      #E5DDB0; /* lotusWhite2 */
+    --c-surface: #F2ECBC; /* lotusWhite3 — painel mais claro que a pagina */
+    --c-line:    #D5CEA3; /* lotusWhite0 — divisorias decorativas */
+    
+    --c-fg:      #545464; /* lotusInk1        — 5.41:1 sobre bg | 6.18:1 sobre surface */
+    --c-muted:   #5C5A4E; /* lotusGray2  (*)  — 5.06:1 sobre bg | 5.78:1 sobre surface */
+    --c-accent:  #42588A; /* lotusBlue4  (*)  — 5.11:1 sobre bg | 5.84:1 sobre surface */
+    --c-warn:    #8F4C00; /* lotusOrange (*)  — 4.78:1 sobre bg | 5.47:1 sobre surface */
+    --c-alert:   #A32F42; /* lotusRed    (*)  — 5.03:1 sobre bg | 5.78:1 sobre surface */
+ 
+    /* Texto sobre superficie preenchida com --c-accent */
+    --c-on-accent: #F2ECBC;
+
+    /* Rampa altimetrica (200 m por faixa). Fora dos seis tons da interface de
+    proposito: aqui a cor e dado, nao decoracao. */
+    --relevo-0:  #EDE7C4;  /* 0-200 m, quase a superficie */
+    --relevo-1:  #CFDCA8;  --relevo-2:  #C3D497;  --relevo-3:  #BCCB88;
+    --relevo-4:  #C6C87E;  --relevo-5:  #D2C276;  --relevo-6:  #DBB56B;
+    --relevo-7:  #DCA561;  --relevo-8:  #D39257;  --relevo-9:  #C67F4F;
+    --relevo-10: #B36A48;  --relevo-11: #A05C46;  --relevo-12: #8E5347;
+    --relevo-13: #9C7A6A;  --relevo-14: #C2B6A8;
+
+    /* Rampa termica (2 C por faixa, de 10 a 34 C). Tons mais fechados que os
+    do Wave: sobre o fundo claro do Lotus, um azul ou um verde claro demais
+    deixaria de se distinguir da propria superficie. */
+    --temp-0:  #3E5C8F;  --temp-1:  #4B72A3;  --temp-2:  #4E8CA2;
+    --temp-3:  #5E9186;  --temp-4:  #6E8F6A;  --temp-5:  #7C8F4E;
+    --temp-6:  #8D8B3F;  --temp-7:  #9C8235;  --temp-8:  #A9742A;
+    --temp-9:  #B25F22;  --temp-10: #AB4A28;  --temp-11: #A32F42;
+    --temp-12: #8A2438;
+
+    /* Rampa de chuva: mesma escala do tema escuro, em tons que se leem sobre
+    o fundo claro. */
+    --chuva-1: #8FB1CC;  --chuva-2: #6693BF;  --chuva-3: #4D699B;
+    --chuva-4: #624C83;  --chuva-5: #B35B79;  --chuva-6: #C84053;
+    --chuva-7: #8A2438;
+
+    /* Escala de vento (km/h), fixa como a Beaufort. Seis faixas: calmaria,
+    brisa leve, moderado, forte, muito forte, vendaval. */
+    --vento-0: #6E6A5C;  --vento-1: #42588A;  --vento-2: #4E8CA2;
+    --vento-3: #8F6B12;  --vento-4: #AB4A28;  --vento-5: #A32F42;
+
+  }
+}
+
+:root[data-theme="light"] {
+    color-scheme: light;
+
+    --c-bg:      #E5DDB0; /* lotusWhite2 */
+    --c-surface: #F2ECBC; /* lotusWhite3 — painel mais claro que a pagina */
+    --c-line:    #D5CEA3; /* lotusWhite0 — divisorias decorativas */
+
+    --c-fg:      #545464; /* lotusInk1        — 5.41:1 sobre bg | 6.18:1 sobre surface */
+    --c-muted:   #5C5A4E; /* lotusGray2  (*)  — 5.06:1 sobre bg | 5.78:1 sobre surface */
+    --c-accent:  #42588A; /* lotusBlue4  (*)  — 5.11:1 sobre bg | 5.84:1 sobre surface */
+    --c-warn:    #8F4C00; /* lotusOrange (*)  — 4.78:1 sobre bg | 5.47:1 sobre surface */
+    --c-alert:   #A32F42; /* lotusRed    (*)  — 5.03:1 sobre bg | 5.78:1 sobre surface */
+
+    /* Texto sobre superficie preenchida com --c-accent */
+    --c-on-accent: #F2ECBC;
+
+    --relevo-0:  #EDE7C4;  /* 0-200 m, quase a superficie */
+    --relevo-1:  #CFDCA8;  --relevo-2:  #C3D497;  --relevo-3:  #BCCB88;
+    --relevo-4:  #C6C87E;  --relevo-5:  #D2C276;  --relevo-6:  #DBB56B;
+    --relevo-7:  #DCA561;  --relevo-8:  #D39257;  --relevo-9:  #C67F4F;
+    --relevo-10: #B36A48;  --relevo-11: #A05C46;  --relevo-12: #8E5347;
+    --relevo-13: #9C7A6A;  --relevo-14: #C2B6A8;
+
+    /* Rampa termica (2 C por faixa, de 10 a 34 C). Tons mais fechados que os
+    do Wave: sobre o fundo claro do Lotus, um azul ou um verde claro demais
+    deixaria de se distinguir da propria superficie. */
+    --temp-0:  #3E5C8F;  --temp-1:  #4B72A3;  --temp-2:  #4E8CA2;
+    --temp-3:  #5E9186;  --temp-4:  #6E8F6A;  --temp-5:  #7C8F4E;
+    --temp-6:  #8D8B3F;  --temp-7:  #9C8235;  --temp-8:  #A9742A;
+    --temp-9:  #B25F22;  --temp-10: #AB4A28;  --temp-11: #A32F42;
+    --temp-12: #8A2438;
+
+    /* Rampa de chuva: mesma escala do tema escuro, em tons que se leem sobre
+    o fundo claro. */
+    --chuva-1: #8FB1CC;  --chuva-2: #6693BF;  --chuva-3: #4D699B;
+    --chuva-4: #624C83;  --chuva-5: #B35B79;  --chuva-6: #C84053;
+    --chuva-7: #8A2438;
+
+    /* Escala de vento (km/h), fixa como a Beaufort. Seis faixas: calmaria,
+    brisa leve, moderado, forte, muito forte, vendaval. */
+    --vento-0: #6E6A5C;  --vento-1: #42588A;  --vento-2: #4E8CA2;
+    --vento-3: #8F6B12;  --vento-4: #AB4A28;  --vento-5: #A32F42;
+}
