@@ -1,6 +1,6 @@
-{{define "title"}}ClimaSP - Agregador Metereológico{{end}}
+{{define "title"}}ClimaSP - Agregador Meteorológico{{end}}
 
-{{define "description"}}Página inicial do ClimaSP, o site agregador de dados metereológicos de São Paulo{{end}}
+{{define "description"}}Página inicial do ClimaSP, o site agregador de dados meteorológicos de São Paulo{{end}}
 
 {{define "head_page"}}
 <link rel="stylesheet" href="/static/css/home.css">
@@ -13,9 +13,9 @@
             <p class="hero-olho">Dados abertos, reunidos em um lugar só</p>
             <h1 id="hero-heading">Condições meteorológicas do Estado de São Paulo</h1>
             <p class="hero-lede">
-                O ClimaSP junta estações oficiais, institutos de pesquisa e redes
-                colaborativas em um mapa único — e diz, para cada ponto do
-                território, o quanto aquele número merece confiança.
+                O ClimaSP junta dados de institutos e de estações particulares em
+                um mapa único — e diz, para cada ponto do território, o quanto
+                aquele número merece confiança.
             </p>
             <p class="hero-actions">
                 <a class="btn btn-primary" href="/mapa">Ver mapa interativo</a>
@@ -25,17 +25,19 @@
             <!-- dl porque cada numero e o valor de um rotulo: e uma lista de
                  pares, nao uma lista de itens soltos. -->
             <dl class="hero-numeros">
+                {{if .Data.StationsKnown}}
                 <div class="numero">
                     <dt>Estações</dt>
-                    <dd>28</dd>
+                    <dd>{{.Data.Stations}}</dd>
                 </div>
+                {{end}}
                 <div class="numero">
                     <dt>Municípios</dt>
                     <dd>645</dd>
                 </div>
                 <div class="numero">
                     <dt>Fontes</dt>
-                    <dd>5</dd>
+                    <dd>3</dd>
                 </div>
             </dl>
         </div>
@@ -160,31 +162,33 @@
                     </p>
                     <p>
                     Uma leitura de três horas atrás vale menos que uma de agora. Uma
-                    estação colaborativa sem histórico vale menos que uma oficial
-                    validada. E um ponto a 200 km da estação mais próxima não vale
+                    estação particular vale menos que uma oficial, e um modelo
+                    numérico vale menos que uma medição. E um ponto a 200 km da estação mais próxima não vale
                     quase nada, por melhor que seja a estação. O ClimaSP calcula esse
                     desconto e o mostra no mapa: onde não há evidência suficiente, a
                     camada de temperatura recebe um véu e o campo assume a cor da
                     página.
                     </p>
                     <p>
-                    O mapa é inteiramente vetorial e abre direto do arquivo, sem
-                    servidor e sem chave de API. A base territorial vem do IBGE e o
-                    relevo do modelo digital de elevação TOPODATA, do INPE.
+                    O servidor do ClimaSP coleta os institutos a cada intervalo e
+                    recebe as leituras que as estações particulares enviam,
+                    assinadas com a chave de cada uma. O mapa é inteiramente
+                    vetorial; a base territorial vem do IBGE e o relevo do modelo
+                    digital de elevação SRTM30, da NASA e do USGS.
                     </p>
 
                     <dl class="niveis">
                         <div class="nivel nivel-alta">
                             <dt>Confiança alta</dt>
-                            <dd>Estação oficial, leitura recente e validada.</dd>
+                            <dd>Estação oficial com leitura recente.</dd>
                         </div>
                         <div class="nivel nivel-media">
                             <dt>Confiança média</dt>
-                            <dd>Estação privada com histórico consistente.</dd>
+                            <dd>Estação particular com leitura recente.</dd>
                         </div>
                         <div class="nivel nivel-baixa">
                             <dt>Confiança baixa</dt>
-                            <dd>Leitura antiga ou divergente das estações vizinhas.</dd>
+                            <dd>Leitura com 3 horas ou mais, ou valor de modelo numérico.</dd>
                         </div>
                     </dl>
                 </div>
@@ -192,15 +196,13 @@
                 <aside class="sobre-aside" aria-labelledby="fontes-heading">
                     <h3 id="fontes-heading">De onde vêm os dados</h3>
                     <ul class="fontes" role="list">
-                        <li><strong>INMET</strong> Instituto Nacional de Meteorologia</li>
-                        <li><strong>CEMADEN</strong> Centro Nacional de Monitoramento e Alertas de Desastres Naturais</li>
-                        <li><strong>IAC/CIIAGRO</strong> Instituto Agronômico de Campinas</li>
-                        <li><strong>Estações privadas</strong> Aeroportos, universidades e empresas</li>
-                        <li><strong>Rede colaborativa</strong> Estações domésticas enviadas por usuários</li>
+                        <li><strong>CEMADEN</strong> Pluviômetros do Centro Nacional de Monitoramento e Alertas de Desastres Naturais</li>
+                        <li><strong>Open-Meteo</strong> Modelo numérico de previsão, amostrado em 28 cidades</li>
+                        <li><strong>Estações particulares</strong> Cadastradas pelos usuários, que enviam as próprias leituras</li>
                     </ul>
                     <p class="fontes-nota">
                     Malha territorial e divisas municipais: IBGE.
-                    Altimetria: TOPODATA/INPE.
+                    Altimetria: SRTM30 (NASA/USGS).
                     </p>
                 </aside>
             </div>
@@ -210,8 +212,8 @@
         <div class="chamada">
             <h2 class="secao-titulo" id="cta-heading">Veja como está agora</h2>
             <p>
-            O mapa e todas as medições são abertos, sem conta. A conta serve só
-            para guardar as suas regiões de interesse.
+            O mapa e todas as medições são abertos, sem conta. A conta serve
+            para cadastrar as suas estações e acompanhar os envios delas.
             </p>
             <p class="hero-actions">
             <a class="btn btn-primary" href="/mapa">Abrir o mapa</a>

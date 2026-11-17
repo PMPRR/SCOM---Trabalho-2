@@ -47,11 +47,10 @@ func NewRouter(log *slog.Logger, db *pgxpool.Pool, dev bool) (http.Handler, erro
 	// where the site runs over plain HTTP on localhost.
 	secureCookies := !dev
 
-	pages := handler.NewPageHandler(rd)
+	stationService := service.NewStationService(repository.NewStationRepository(db), log)
+	pages := handler.NewPageHandler(rd, stationService)
 	auth := handler.NewAuthHandler(authService, rd, secureCookies)
-	stations := handler.NewStationHandler(
-		service.NewStationService(repository.NewStationRepository(db), log), rd,
-	)
+	stations := handler.NewStationHandler(stationService, rd)
 
 	// Access rules, applied per route.
 	loggedIn := middleware.RequireAuth(rd)

@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/PMPRR/SCOM---Trabalho-2/internal/domain"
 	"github.com/PMPRR/SCOM---Trabalho-2/internal/server/middleware"
 	"github.com/PMPRR/SCOM---Trabalho-2/internal/server/render"
+	"github.com/PMPRR/SCOM---Trabalho-2/internal/service"
 )
 
 // PageData is what every page template receives.
@@ -39,18 +41,40 @@ func newPageData(r *http.Request, active string) PageData {
 	return data
 }
 
+// StationCounter is what the home page needs from the stations: how many
+// are open to the public.
+type StationCounter interface {
+	List(ctx context.Context, limit, offset int) ([]domain.Station, service.Page, error)
+}
+
 // PageHandler serves the HTML pages of the site that are open to everyone.
 type PageHandler struct {
-	render *render.Renderer
+	render   *render.Renderer
+	stations StationCounter // nil: the home page leaves the count out
 }
 
-func NewPageHandler(rd *render.Renderer) *PageHandler {
-	return &PageHandler{render: rd}
+func NewPageHandler(rd *render.Renderer, stations StationCounter) *PageHandler {
+	return &PageHandler{render: rd, stations: stations}
 }
 
-// Home handles GET /
+// homeView is what the home page shows besides its fixed text.
+type homeView struct {
+	Stations      int
+	StationsKnown bool
+}
+
+// Home handles GET /. The number of stations comes from the database; if it
+// cannot be read, the page still opens, without that number.
 func (h *PageHandler) Home(w http.ResponseWriter, r *http.Request) {
-	h.render.HTML(w, r, http.StatusOK, "home", newPageData(r, "home"))
+	data := newPageData(r, "home")
+	view := homeView{}
+	if h.stations != nil {
+		if _, page, err := h.stations.List(r.Context(), 1, 0); err == nil {
+			view.Stations, view.StationsKnown = page.Total, true
+		}
+	}
+	data.Data = view
+	h.render.HTML(w, r, http.StatusOK, "home", data)
 }
 
 // Map handles GET /mapa

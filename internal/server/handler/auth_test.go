@@ -111,7 +111,7 @@ func newSite(t *testing.T) *site {
 	}
 
 	auth := NewAuthHandler(authService, rd, false)
-	pages := NewPageHandler(rd)
+	pages := NewPageHandler(rd, nil)
 	throttled := middleware.RateLimit(security.NewRateLimiter(10, time.Minute), rd)
 	repo := &fakeRepo{}
 	stations := NewStationHandler(service.NewStationService(repo, log), rd)
