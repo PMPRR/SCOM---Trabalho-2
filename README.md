@@ -165,10 +165,22 @@ make promote-admin EMAIL=voce@example.com
 | POST | `/sair` | Encerra a sessão |
 | GET | `/conta` | Dados da conta (exige login) |
 | GET | `/admin/usuarios` | Lista de usuários (exige perfil administrador) |
+| GET | `/painel/estacoes?q=&offset=` | Painel de estações: as suas, ou todas para o administrador (exige login) |
+| GET | `/painel/estacoes/linhas?q=&offset=` | Linhas da tabela do painel (fragmento HTML para o HTMX) |
+| GET | `/painel/estacoes/nova` | Formulário de nova estação |
+| POST | `/painel/estacoes` | Cadastra a estação do formulário |
+| GET | `/painel/estacoes/{id}/editar` | Formulário de edição |
+| PUT, POST | `/painel/estacoes/{id}` | Salva a edição (PUT pelo HTMX, POST sem JavaScript) |
+| POST | `/painel/estacoes/{id}/ativa` | Ativa ou desativa (`active=true` ou `false`) |
+| DELETE, POST | `/painel/estacoes/{id}` e `/{id}/excluir` | Exclui (DELETE pelo HTMX, POST sem JavaScript) |
 | GET | `/estacoes?offset=` | Lista de estações, em cartões (fragmento HTML para o HTMX) |
 | GET | `/estacoes/{id}` | Cartão de uma estação (fragmento HTML para o HTMX) |
 | GET | `/api/stations?limit=&offset=` | Estações com a leitura mais recente (JSON) |
-| GET | `/api/stations/{id}` | Uma estação (JSON) |
+| GET | `/api/stations/{id}` | Uma estação ativa (JSON) |
+| POST | `/api/stations` | Cadastra uma estação: 201 com `Location` (exige login) |
+| PUT | `/api/stations/{id}` | Substitui os dados de uma estação: 200 (exige login) |
+| PATCH | `/api/stations/{id}` | Ativa ou desativa, corpo `{"active": false}`: 200 (exige login) |
+| DELETE | `/api/stations/{id}` | Exclui a estação e as leituras dela: 204 (exige login) |
 | GET | `/healthz` | Estado do servidor e do banco (JSON) |
 | GET | `/static/...` | Arquivos estáticos |
 
@@ -195,29 +207,85 @@ Há três níveis de acesso:
 | Cadastro e login | sim | sim | sim |
 | `/conta` e `/sair` | não (vai para `/entrar`) | sim | sim |
 | `/admin/usuarios` | não (vai para `/entrar`) | não (403) | sim |
+| Painel de estações | não (vai para `/entrar`) | as suas | todas |
+| Cadastrar estação | não (401) | sim, fica dono dela | sim, fica dono dela |
+| Editar ou excluir estação | não (401) | só as suas (403 nas outras) | as cadastradas no site |
+| Ativar ou desativar estação | não (401) | só as suas (403 nas outras) | todas, inclusive as oficiais |
+| Editar ou excluir estação oficial | não (401) | não (403) | não (409) |
 
 Como funciona:
 
-- **Senhas**: guardadas só como hash bcrypt (custo 12); mínimo de 8 caracteres, máximo de
-  72 bytes. O
-  login responde a mesma mensagem para e-mail inexistente e senha errada, e
-  gasta o mesmo tempo nos dois casos.
+- **Senhas**: guardadas só como hash bcrypt (custo 12); mínimo de 8
+  caracteres, máximo de 72 bytes. O login responde a mesma mensagem para
+  e-mail inexistente e senha errada, e gasta o mesmo tempo nos dois casos.
 - **Sessão**: no login o servidor sorteia um token de 32 bytes, envia-o no
   cookie `climasp_session` (`HttpOnly`, `SameSite=Lax`, `Secure` fora de
   `APP_ENV=dev`) e grava no banco apenas o SHA-256 dele, na tabela `sessions`.
   Sair apaga a linha, e o cookie antigo deixa de valer. Dura 12 h, ou 30 dias
   com "manter conectado".
 - **Autorização**: os middlewares `RequireAuth` e `RequireRole` protegem as
-  rotas no servidor; esconder o link no menu é só conveniência.
-- **CSRF**: todo POST precisa repetir o valor do cookie `climasp_csrf`, no
-  cabeçalho `X-CSRF-Token` (o HTMX envia sozinho) ou no campo `csrf_token` do
-  formulário. Sem isso a resposta é 403.
+  rotas no servidor; quem pode mexer em cada estação é decidido no serviço
+  (`internal/service/station_manage.go`). Esconder um botão ou link na página
+  é só conveniência.
+- **CSRF**: todo pedido que altera algo (POST, PUT, PATCH, DELETE) precisa
+  repetir o valor do cookie `climasp_csrf`, no cabeçalho `X-CSRF-Token` (o
+  HTMX envia sozinho) ou no campo `csrf_token` do formulário. Sem isso a
+  resposta é 403.
 - **Força bruta**: `POST /entrar` e `POST /cadastro` aceitam 10 tentativas por
   minuto por endereço IP; acima disso, 429 com `Retry-After`.
 - **Entradas**: validadas no serviço; o SQL usa sempre parâmetros e os
   templates escapam o que exibem.
-- **Logs**: criação de conta, login e falhas de autenticação são registrados,
-  sem senhas nem tokens.
+- **Logs**: criação de conta, login, falhas de autenticação e toda alteração
+  de estação (com o id de quem fez) são registrados, sem senhas nem tokens.
+
+## Cadastro e gerenciamento de estações
+
+A estação é a entidade principal do sistema. Há dois tipos:
+
+- **Oficiais**: coletadas de um instituto (Open-Meteo, CEMADEN), sem dono.
+  Nome, código e posição vêm da fonte e são regravados a cada coleta, então
+  ninguém as edita nem exclui pelo site (409); o administrador pode
+  desativá-las, o que as tira do mapa sem apagar as leituras.
+- **Particulares**: cadastradas no site por um operador ou administrador, que
+  fica dono delas. Pertencem ao instituto `particular` (migração 00011).
+
+Uma estação desativada some do mapa, de `/estacoes` e de `/api/stations`, mas
+continua no painel de quem a gerencia.
+
+Validação no servidor, para o formulário e para a API:
+
+| Campo | Regra |
+|---|---|
+| `name` | 1 a 120 caracteres, sem caracteres de controle |
+| `external_code` | 1 a 50 caracteres: letras sem acento, números, `.`, `_` e `-`; único entre as estações particulares |
+| `lat`, `lon` | dentro da faixa do Estado (latitude −25,5 a −19,5; longitude −53,5 a −44); o formulário aceita vírgula decimal |
+| `altitude_m` | opcional, de −100 a 3000 m |
+| `active` | opcional na API (padrão `true`) |
+
+A API exige o corpo em JSON (`Content-Type: application/json`, senão 415) e
+recusa campos desconhecidos (400). Um erro sempre vem no mesmo formato, com o
+campo culpado quando há um:
+
+```json
+{"error": {"code": "invalid_parameter", "message": "A latitude deve estar entre -25,5 e -19,5, a faixa do Estado de São Paulo.", "field": "lat"}}
+```
+
+Exemplo com `curl`, depois de entrar pelo site (copie os cookies
+`climasp_session` e `climasp_csrf` do navegador; o valor de `climasp_csrf` vai
+também no cabeçalho):
+
+```sh
+curl -i http://localhost:8080/api/stations \
+  -H "Content-Type: application/json" \
+  -H "Cookie: climasp_session=SESSAO; climasp_csrf=TOKEN" \
+  -H "X-CSRF-Token: TOKEN" \
+  -d '{"external_code":"sitio-01","name":"Sítio","lat":-23.55,"lon":-46.63}'
+```
+
+O painel usa HTMX: a busca filtra enquanto se digita, ativar troca só a linha
+da tabela e excluir pede confirmação e remove a linha. O formulário tem um
+mapa que preenche latitude e longitude com um clique e mostra o município do
+ponto. Sem JavaScript, tudo funciona com formulários comuns.
 
 ## Fontes de dados
 
@@ -249,8 +317,8 @@ Open-Meteo (CC BY 4.0). Eles aparecem na página do mapa.
 
 | Tabela | Conteúdo |
 |---|---|
-| `institutes` | Institutos de origem dos dados |
-| `stations` | Estações, com localização geográfica e dono opcional |
+| `institutes` | Institutos de origem dos dados, e `particular` para as estações cadastradas no site |
+| `stations` | Estações, com localização geográfica, situação (ativa) e dono opcional |
 | `observations` | Medições por estação e instante |
 | `users` | Usuários, com perfil `operator` ou `admin` |
 | `sessions` | Sessões abertas: hash do token, usuário e validade |
@@ -266,7 +334,7 @@ Open-Meteo (CC BY 4.0). Eles aparecem na página do mapa.
 - [x] Campo de chuva e divisas municipais
 - [x] Painel de camadas do mapa reorganizado
 - [x] Autenticação e controle de acesso (`v0.6-auth`)
-- [ ] Cadastro, alteração e exclusão de estações
+- [x] Cadastro, alteração e exclusão de estações (`v0.7-stations-crud`)
 - [ ] Documentação da API e da arquitetura
 
 ## Autor
