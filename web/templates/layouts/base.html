@@ -12,7 +12,9 @@
         <script src="/static/js/script.js" defer></script>
         {{block "head_page" .}}{{end}}
     </head>
-    <body>
+    <!-- hx-headers faz o HTMX enviar o token CSRF em todo pedido que ele
+        fizer a partir desta pagina (ver middleware.CSRF). -->
+    <body hx-headers='{"X-CSRF-Token": "{{.CSRFToken}}"}'>
 {{template "header" .}}
 {{block "content" .}}{{end}}
 {{template "footer" .}}

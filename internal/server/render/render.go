@@ -23,6 +23,17 @@ type Renderer struct {
 	dev       bool // true exposes technical error details in responses
 	templates fs.FS
 	views     views
+
+	// errorPage builds the data of the "error" page for someone browsing.
+	// It is set by the layer that knows what a page needs (who is logged
+	// in, the CSRF token); without it, errors are answered in JSON.
+	errorPage func(r *http.Request, status int, message string) any
+}
+
+// UseErrorPage makes errors of page navigations render the "error" page,
+// with the data that build returns.
+func (rd *Renderer) UseErrorPage(build func(r *http.Request, status int, message string) any) {
+	rd.errorPage = build
 }
 
 // views holds the parsed templates: one set per page, and one set with the
@@ -165,43 +176,90 @@ func (rd *Renderer) BadRequest(w http.ResponseWriter, r *http.Request, field, me
 	})
 }
 
+// Reject answers with a status and message chosen by the caller, for
+// refusals that are decided outside the inner layers (a failed CSRF check).
+func (rd *Renderer) Reject(w http.ResponseWriter, r *http.Request, status int, code, message string) {
+	rd.writeError(w, r, status, errorBody{Code: code, Message: message})
+}
+
+// Describe translates an error from the inner layers into what a client is
+// told: the HTTP status, a stable code and a message for the end user. It is
+// the single table of that translation; Fail uses it, and so do the handlers
+// that show the message inside a page. Anything it does not recognize is an
+// internal error, whose cause is never part of the message.
+func (rd *Renderer) Describe(err error) (status int, code, message, field string) {
+	var invalid *domain.ValidationError
+	switch {
+	case errors.As(err, &invalid):
+		return http.StatusBadRequest, "invalid_parameter", invalid.Message, invalid.Field
+	case errors.Is(err, domain.ErrNotFound):
+		return http.StatusNotFound, "not_found", "Recurso não encontrado.", ""
+	case errors.Is(err, domain.ErrInvalidCredentials):
+		return http.StatusUnauthorized, "invalid_credentials", "E-mail ou senha incorretos.", ""
+	case errors.Is(err, domain.ErrUnauthenticated):
+		return http.StatusUnauthorized, "unauthenticated", "Entre na sua conta para continuar.", ""
+	case errors.Is(err, domain.ErrForbidden):
+		return http.StatusForbidden, "forbidden", "Você não tem permissão para acessar isto.", ""
+	case errors.Is(err, domain.ErrEmailTaken):
+		return http.StatusConflict, "email_taken", "Já existe uma conta com este e-mail.", ""
+	case errors.Is(err, domain.ErrTooManyRequests):
+		return http.StatusTooManyRequests, "too_many_requests", "Muitas tentativas. Aguarde um minuto e tente de novo.", ""
+	default:
+		return http.StatusInternalServerError, "internal_error", "Erro interno do servidor.", ""
+	}
+}
+
 // Fail translates an error from the inner layers into an HTTP response.
 // Unknown errors become 500: they are logged with their cause, which
 // reaches the client only in development.
 func (rd *Renderer) Fail(w http.ResponseWriter, r *http.Request, err error) {
-	var invalid *domain.ValidationError
-	switch {
-	case errors.As(err, &invalid):
-		rd.BadRequest(w, r, invalid.Field, invalid.Message)
-	case errors.Is(err, domain.ErrNotFound):
-		rd.writeError(w, r, http.StatusNotFound, errorBody{
-			Code: "not_found", Message: "Recurso não encontrado.",
-		})
-	default:
+	status, code, message, field := rd.Describe(err)
+	body := errorBody{Code: code, Message: message, Field: field}
+	if status == http.StatusInternalServerError {
 		rd.log.Error("internal error", "method", r.Method, "path", r.URL.Path, "error", err)
-		body := errorBody{Code: "internal_error", Message: "Erro interno do servidor."}
 		if rd.dev {
 			body.Detail = err.Error()
 		}
-		rd.writeError(w, r, http.StatusInternalServerError, body)
 	}
+	rd.writeError(w, r, status, body)
 }
 
-// writeError answers in the format the caller can use: an HTML fragment for
-// a request made by HTMX (it sends the HX-Request header), JSON otherwise.
-// The status code is the same in both.
+// writeError answers in the format the caller can use, always with the same
+// status code: an HTML fragment for a request made by HTMX (it sends the
+// HX-Request header), the error page for someone browsing (the request asks
+// for text/html), and JSON for everything else, which is the API.
 func (rd *Renderer) writeError(w http.ResponseWriter, r *http.Request, status int, body errorBody) {
-	if r.Header.Get("HX-Request") != "true" {
-		rd.JSON(w, status, map[string]errorBody{"error": body})
-		return
-	}
-	var buf bytes.Buffer
-	if err := errorFragment.Execute(&buf, body); err != nil {
-		http.Error(w, body.Message, status)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(status)
-	_, _ = buf.WriteTo(w)
-}
+	switch {
+	case r.Header.Get("HX-Request") == "true":
+		var buf bytes.Buffer
+		if err := errorFragment.Execute(&buf, body); err != nil {
+			http.Error(w, body.Message, status)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(status)
+		_, _ = buf.WriteTo(w)
 
+	case rd.errorPage != nil && r.Method == http.MethodGet && strings.Contains(r.Header.Get("Accept"), "text/html"):
+		current, err := rd.current()
+		tmpl, ok := current.pages["error"]
+		if err != nil || !ok {
+			rd.JSON(w, status, map[string]errorBody{"error": body})
+			return
+		}
+		// Rendered by hand rather than through HTML: a failure here must
+		// not come back to writeError and loop.
+		var buf bytes.Buffer
+		if err := tmpl.ExecuteTemplate(&buf, "base", rd.errorPage(r, status, body.Message)); err != nil {
+			rd.log.Error("internal error", "method", r.Method, "path", r.URL.Path, "error", err)
+			rd.JSON(w, status, map[string]errorBody{"error": body})
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(status)
+		_, _ = buf.WriteTo(w)
+
+	default:
+		rd.JSON(w, status, map[string]errorBody{"error": body})
+	}
+}

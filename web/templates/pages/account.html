@@ -1,0 +1,35 @@
+{{define "title"}}Minha conta - ClimaSP{{end}}
+
+{{define "description"}}Dados da sua conta no ClimaSP.{{end}}
+
+{{define "head_page"}}
+<link rel="stylesheet" href="/static/css/auth.css">
+{{end}}
+
+{{define "content"}}
+<main id="content">
+    <div class="account">
+        <h1>Minha conta</h1>
+
+        <section class="account-card" aria-labelledby="dados-heading">
+            <h2 id="dados-heading">Seus dados</h2>
+            <dl class="account-data">
+                <dt>Nome</dt>
+                <dd>{{.Data.Name}}</dd>
+                <dt>E-mail</dt>
+                <dd>{{.Data.Email}}</dd>
+                <dt>Perfil</dt>
+                <dd>{{.Data.Role}}</dd>
+                <dt>Conta criada em</dt>
+                <dd>{{.Data.Since}}</dd>
+            </dl>
+
+            {{if .Data.IsAdmin}}
+            <p class="account-actions">
+                <a class="btn btn-secondary" href="/admin/usuarios">Ver usuários cadastrados</a>
+            </p>
+            {{end}}
+        </section>
+    </div>
+</main>
+{{end}}

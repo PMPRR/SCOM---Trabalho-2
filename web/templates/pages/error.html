@@ -1,0 +1,23 @@
+{{define "title"}}Não foi possível abrir a página - ClimaSP{{end}}
+
+{{define "description"}}A página pedida não pôde ser aberta.{{end}}
+
+{{define "head_page"}}
+<link rel="stylesheet" href="/static/css/auth.css">
+{{end}}
+
+{{define "content"}}
+<main id="content">
+    <div class="account">
+        <h1>Não foi possível abrir a página</h1>
+
+        <section class="account-card" aria-labelledby="erro-heading">
+            <h2 id="erro-heading">Erro {{.Data.Status}}</h2>
+            <p>{{.Data.Message}}</p>
+            <p class="account-actions">
+                <a class="btn btn-secondary" href="/">Voltar ao início</a>
+            </p>
+        </section>
+    </div>
+</main>
+{{end}}

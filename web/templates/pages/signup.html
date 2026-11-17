@@ -16,7 +16,13 @@
                 Pedimos só o necessário para abrir o mapa já na sua região.
             </p>
 
-            <form class="auth-form" action="#" method="post">
+            <form class="auth-form" action="/cadastro" method="post"
+                hx-post="/cadastro" hx-target="#auth-aviso" hx-swap="innerHTML">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <!-- O aviso de erro fica aqui. Com HTMX, o servidor responde so
+                    com o fragmento do erro, que entra nesta area; sem JavaScript,
+                    a pagina volta inteira ja com a mensagem. -->
+                <div class="auth-aviso" id="auth-aviso" role="alert">{{if .FormError}}<p class="request-error">{{.FormError}}</p>{{end}}</div>
                 <div class="field">
                     <label class="field-label" for="nome">Nome</label>
                     <input class="field-input"
@@ -24,6 +30,8 @@
                         id="nome"
                         name="nome"
                         autocomplete="name"
+                        maxlength="100"
+                        value="{{index .Form "nome"}}"
                         required>
                 </div>
 
@@ -36,6 +44,8 @@
                         autocomplete="email"
                         inputmode="email"
                         aria-describedby="email-ajuda"
+                        maxlength="254"
+                        value="{{index .Form "email"}}"
                         required>
                     <p class="field-hint" id="email-ajuda">Serve para entrar e para recuperar a senha.</p>
                 </div>
@@ -49,11 +59,12 @@
                             name="senha"
                             autocomplete="new-password"
                             minlength="8"
+                            maxlength="72"
                             aria-describedby="senha-ajuda"
                             required>
                         <button class="field-toggle" type="button" data-toggle-senha="senha" hidden>Mostrar</button>
                     </div>
-                    <p class="field-hint" id="senha-ajuda">No mínimo 8 caracteres.</p>
+                    <p class="field-hint" id="senha-ajuda">De 8 a 72 caracteres.</p>
                 </div>
 
                 <div class="field">
@@ -99,7 +110,6 @@
                 </div>
 
                 <button class="btn btn-primary" type="submit">Criar conta</button>
-                <p class="auth-aviso" id="auth-aviso" role="status" hidden></p>
 
             </form>
 
