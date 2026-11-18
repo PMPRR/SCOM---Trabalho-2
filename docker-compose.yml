@@ -55,5 +55,24 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # Estação particular simulada no câmpus da UNESP em Sorocaba (make estacao).
+  # Só sobe quando pedida (perfil "demo"): cria a própria conta e chave SSH,
+  # cadastra a estação e manda leituras assinadas inventadas.
+  estacao-unesp:
+    image: localhost/climasp:latest
+    profiles: ["demo"]
+    entrypoint: ["fakestation"]
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      SERVER_URL: http://app:8080
+      STATION_INTERVAL: ${ESTACAO_INTERVALO:-60}
+      STATION_PASSWORD: ${ESTACAO_SENHA:-}
+    volumes:
+      - estacao-unesp:/data
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  estacao-unesp:

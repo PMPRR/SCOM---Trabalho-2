@@ -23,7 +23,7 @@ fi
 : "${POSTGRES_DB:?defina POSTGRES_DB no .env}"
 
 step "Compilando o servidor e subindo o banco e o servidor ($COMPOSE)"
-$COMPOSE up -d --build
+$COMPOSE up -d --build db app
 
 step "Esperando o servidor (banco inicializando e migrações)"
 waited=0

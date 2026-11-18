@@ -25,20 +25,26 @@ RUN go mod download
 
 COPY cmd ./cmd
 COPY internal ./internal
-RUN go build -trimpath -ldflags='-s -w' -o /out/server ./cmd/server \
- && go build -trimpath -ldflags='-s -w' -o /out/ingest ./cmd/ingest
+# timetzdata embute os fusos horários no binário (TZ=America/Sao_Paulo funciona
+# sem o pacote tzdata na imagem final).
+RUN go build -trimpath -tags timetzdata -ldflags='-s -w' -o /out/server ./cmd/server \
+ && go build -trimpath -tags timetzdata -ldflags='-s -w' -o /out/ingest ./cmd/ingest \
+ && go build -trimpath -ldflags='-s -w' -o /out/fakestation ./cmd/fakestation
 
 # ---------------------------------------------------------------- execução
 FROM docker.io/library/alpine:3.22
 
-# ca-certificates: a coleta fala HTTPS com o CEMADEN e o Open-Meteo.
-# tzdata: horários dos logs no fuso de São Paulo.
-RUN apk add --no-cache ca-certificates tzdata \
- && adduser -D -H -u 10001 climasp
+# Nada é baixado neste estágio: os certificados (a coleta fala HTTPS com o
+# CEMADEN e o Open-Meteo) vêm da imagem do Go, e os fusos já estão nos
+# binários. Assim o build não depende do servidor de pacotes do Alpine.
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+# /data: chave e estado da estação simulada (make estacao), num volume.
+RUN adduser -D -H -u 10001 climasp \
+ && mkdir /data && chown climasp:climasp /data
 
 WORKDIR /app
 COPY --from=build /go/bin/goose /usr/local/bin/goose
-COPY --from=build /out/server /out/ingest /usr/local/bin/
+COPY --from=build /out/server /out/ingest /out/fakestation /usr/local/bin/
 COPY deploy/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod 0755 /usr/local/bin/entrypoint.sh
 # O servidor lê web/templates e web/static a partir da pasta de trabalho.

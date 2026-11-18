@@ -4,7 +4,7 @@ export
 # Podman se estiver instalado; senao Docker. Para forcar: make up COMPOSE="docker compose"
 COMPOSE ?= $(shell if command -v podman >/dev/null 2>&1; then echo podman compose; else echo docker compose; fi)
 
-.PHONY: up down logs reset db run test ingest seed-dev promote-admin migrate-up migrate-down migrate-status schema schema-load
+.PHONY: up down logs reset estacao estacao-logs estacao-parar db run test ingest seed-dev promote-admin migrate-up migrate-down migrate-status schema schema-load
 
 # Tudo com um comando, depois de criar o .env (cp .env.example .env):
 # compila o servidor, sobe banco e servidor em conteineres, aplica as
@@ -14,14 +14,27 @@ up:
 
 # Para os conteineres; o banco fica guardado no volume.
 down:
-	$(COMPOSE) down
+	$(COMPOSE) --profile demo down
 
 logs:
 	$(COMPOSE) logs -f app
 
 # Para tudo e apaga o banco. O proximo make up comeca do zero.
 reset:
-	$(COMPOSE) down -v
+	$(COMPOSE) --profile demo down -v
+
+# Estacao particular simulada no campus da UNESP em Sorocaba. Precisa do
+# make up antes. Cria conta, chave e estacao sozinha e manda uma leitura
+# assinada por minuto (ESTACAO_INTERVALO no .env muda o intervalo).
+estacao:
+	$(COMPOSE) --profile demo up -d estacao-unesp
+	@echo "Estacao simulada no ar. Acompanhe com: make estacao-logs"
+
+estacao-logs:
+	$(COMPOSE) --profile demo logs -f estacao-unesp
+
+estacao-parar:
+	$(COMPOSE) --profile demo stop estacao-unesp
 
 # So o banco, para rodar o servidor na maquina com make run.
 db:

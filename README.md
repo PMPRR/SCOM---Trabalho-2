@@ -46,7 +46,8 @@ sessões e as decisões de projeto, está em
 .
 ├── cmd/
 │   ├── server/main.go            Servidor HTTP
-│   └── ingest/main.go            Coleta manual das fontes externas
+│   ├── ingest/main.go            Coleta manual das fontes externas
+│   └── fakestation/main.go       Estação particular simulada (make estacao)
 ├── internal/
 │   ├── config/                   Configuração lida do ambiente
 │   ├── domain/                   Estação, observação, leitura, usuário e erros
@@ -133,6 +134,30 @@ Depois abra <http://localhost:8080/>. A coleta se repete sozinha a cada
 
 O `make` usa o Podman se ele estiver instalado, senão o Docker. Para escolher:
 `make up COMPOSE="docker compose"`.
+
+#### Estação particular simulada (UNESP Sorocaba)
+
+Para ver uma estação particular funcionando sem montar o hardware, depois do
+`make up`:
+
+```sh
+make estacao          # sobe a estação simulada
+make estacao-logs     # acompanha as leituras que ela manda
+make estacao-parar    # para a estação
+```
+
+O contêiner `estacao-unesp` faz o que uma estação real faria (veja
+[docs/estacao-particular.md](docs/estacao-particular.md)): cria um par de
+chaves Ed25519, abre uma conta própria no site (`estacao.unesp@example.com`),
+cadastra a estação "UNESP Sorocaba (estação simulada)" no câmpus da UNESP em
+Sorocaba (−23,4792; −47,4168, posição do marco geodésico SPS1 do IBGE no
+prédio dos laboratórios) e manda uma leitura assinada por minuto. As leituras
+são inventadas: ciclo diário de temperatura, umidade que acompanha, pressão
+para os 625 m de altitude, vento e uma pancada de chuva de vez em quando.
+A chave e a senha da conta ficam no volume `estacao-unesp`; se o banco for
+apagado, a estação se cadastra de novo sozinha. O código está em
+`cmd/fakestation`. No `.env`, `ESTACAO_INTERVALO` muda o intervalo (em
+segundos, mínimo 60).
 
 Observações:
 
@@ -416,6 +441,9 @@ público). Eles aparecem na página do mapa.
 | `make down` | Para os contêineres; os dados ficam no volume |
 | `make logs` | Acompanha o log do servidor em contêiner |
 | `make reset` | Para os contêineres e apaga o banco |
+| `make estacao` | Sobe a estação simulada da UNESP Sorocaba (depois do `make up`) |
+| `make estacao-logs` | Acompanha as leituras da estação simulada |
+| `make estacao-parar` | Para a estação simulada |
 | `make db` | Sobe só o contêiner do banco |
 | `make run` | Executa o servidor |
 | `make test` | Executa os testes automatizados |
